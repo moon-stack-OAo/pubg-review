@@ -1,0 +1,54 @@
+# Nginx 反代示例：HTTPS → Next.js :3000
+# 复制到 /etc/nginx/sites-available/pubg-review 后按域名修改并启用。
+
+upstream pubg_review {
+    server 127.0.0.1:3000;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name review.example.com;
+
+    # 建议用 certbot 自动跳转到 HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name review.example.com;
+
+    # ssl_certificate     /etc/letsencrypt/live/review.example.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/review.example.com/privkey.pem;
+
+    client_max_body_size 8m;
+
+    # 通用反代
+    location / {
+        proxy_pass http://pubg_review;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+    }
+
+    # MCP Streamable HTTP：拉长超时，避免长请求被网关掐断
+    location /mcp {
+        proxy_pass http://pubg_review;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
