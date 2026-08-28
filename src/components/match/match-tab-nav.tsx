@@ -61,6 +61,7 @@ export function MatchTabNav({
             <Link
               key={tab.id}
               href={href}
+              aria-current={isActive ? "page" : undefined}
               className={`rounded-lg px-3 py-1.5 text-sm transition ${
                 isActive
                   ? "bg-amber-500/15 text-amber-300"

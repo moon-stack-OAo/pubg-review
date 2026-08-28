@@ -1,12 +1,13 @@
 import type {Metadata} from "next";
 import Link from "next/link";
+import {cache} from "react";
 import {Card, ErrorBox, PageShell} from "@/components/ui";
 import {buildMatchReport} from "@/lib/analysis/report-service";
 import {formatDateTime, formatDuration, formatNumber, rankClass,} from "@/lib/format";
 import {friendlyErrorMessage} from "@/lib/errors";
 import {mapLabel} from "@/lib/pubg/maps";
 import {getCachedMatch} from "@/lib/pubg/service";
-import {isPubgPlatform} from "@/lib/pubg/types";
+import {isPubgPlatform, type PubgPlatform} from "@/lib/pubg/types";
 
 type PageProps = {
   params: Promise<{ matchId: string }>;
@@ -15,6 +16,16 @@ type PageProps = {
     accountId?: string;
   }>;
 };
+
+const loadShareMatch = cache(async (platform: PubgPlatform, matchId: string) => {
+  return getCachedMatch(platform, matchId);
+});
+
+const loadShareReport = cache(
+  async (platform: PubgPlatform, matchId: string, accountId: string) => {
+    return buildMatchReport(platform, matchId, accountId);
+  },
+);
 
 export async function generateMetadata({
   params,
@@ -26,7 +37,7 @@ export async function generateMetadata({
     return { title: "对局分享 · PUBG Review" };
   }
   try {
-    const { value: match } = await getCachedMatch(platform, matchId);
+    const { value: match } = await loadShareMatch(platform, matchId);
     const map = mapLabel(match.mapName);
     let title = `${map} · ${match.gameMode} · PUBG Review`;
     let description = `${formatDateTime(match.playedAt)} · 时长 ${formatDuration(match.durationSec)}`;
@@ -77,7 +88,7 @@ export default async function ShareMatchPage({
   let reportError = "";
 
   try {
-    const result = await getCachedMatch(platform, matchId);
+    const result = await loadShareMatch(platform, matchId);
     match = result.value;
   } catch (e) {
     error = friendlyErrorMessage(e);
@@ -92,7 +103,7 @@ export default async function ShareMatchPage({
 
   if (match && accountId && focus) {
     try {
-      const built = await buildMatchReport(platform, matchId, accountId);
+      const built = await loadShareReport(platform, matchId, accountId);
       report = built.report;
     } catch (e) {
       reportError = friendlyErrorMessage(e);

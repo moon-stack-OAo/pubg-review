@@ -9,7 +9,8 @@ import {readSquadMates, writeSquadMates,} from "@/lib/squad-mates-storage";
 import type {SquadMatchRow, SquadMemberStats, SquadSampleMeta, SquadStatsResult,} from "@/lib/squad/types";
 
 const DEFAULT_LIMIT = 20;
-const DEFAULT_GAME_MODE = "squad";
+/** 空=不过滤模式（兼容 squad / squad-fpp） */
+const DEFAULT_GAME_MODE = "";
 const MAX_MATES = 3;
 
 type ApiEnvelope<T> = {
@@ -58,9 +59,7 @@ export function SquadMatesForm({
   const playerKey = accountId || name;
   const [matesInput, setMatesInput] = useState(initialMates.join(", "));
   const [limit, setLimit] = useState(String(initialLimit || DEFAULT_LIMIT));
-  const [gameMode, setGameMode] = useState(
-    initialGameMode || DEFAULT_GAME_MODE,
-  );
+  const [gameMode, setGameMode] = useState(initialGameMode);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState("");
   const hydratedRef = useRef(false);
@@ -74,7 +73,7 @@ export function SquadMatesForm({
       writeSquadMates(playerKey, {
         mates: initialMates,
         limit: initialLimit || DEFAULT_LIMIT,
-        gameMode: initialGameMode || DEFAULT_GAME_MODE,
+        gameMode: initialGameMode,
       });
       return;
     }
@@ -86,7 +85,7 @@ export function SquadMatesForm({
       buildSquadHref(platform, name, {
         mates: stored.mates,
         limit: stored.limit ?? DEFAULT_LIMIT,
-        gameMode: stored.gameMode || DEFAULT_GAME_MODE,
+        gameMode: stored.gameMode ?? DEFAULT_GAME_MODE,
       }),
     );
   }, [
@@ -130,7 +129,7 @@ export function SquadMatesForm({
       Number.isFinite(lim) && lim > 0
         ? Math.min(Math.floor(lim), 32)
         : DEFAULT_LIMIT;
-    const nextMode = gameMode.trim() || DEFAULT_GAME_MODE;
+    const nextMode = gameMode.trim();
     persistAndGo(mates, nextLimit, nextMode);
   }
 
@@ -164,7 +163,7 @@ export function SquadMatesForm({
         Number.isFinite(lim) && lim > 0
           ? Math.min(Math.floor(lim), 32)
           : DEFAULT_LIMIT;
-      const nextMode = gameMode.trim() || DEFAULT_GAME_MODE;
+      const nextMode = gameMode.trim();
       persistAndGo(names, nextLimit, nextMode);
     } catch (err) {
       setSuggestError(err instanceof Error ? err.message : "识别失败");
@@ -201,7 +200,7 @@ export function SquadMatesForm({
           <input
             value={gameMode}
             onChange={(e) => setGameMode(e.target.value)}
-            placeholder="squad"
+            placeholder="空=全部；squad 含 fpp"
             list="squad-game-modes"
             className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200"
           />

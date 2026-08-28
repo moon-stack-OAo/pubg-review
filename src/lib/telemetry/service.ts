@@ -1,5 +1,7 @@
 import {BizError} from "@/lib/errors";
+import {cacheDeleteIf} from "@/lib/cache";
 import {downloadTelemetryJson, PubgApiError,} from "@/lib/pubg/client";
+import {deletePersistedReportsForMatch} from "@/lib/persist/report-store";
 import {getCachedMatch} from "@/lib/pubg/service";
 import type {PubgPlatform} from "@/lib/pubg/types";
 import {parseTelemetryJson} from "@/lib/telemetry/parser";
@@ -22,6 +24,16 @@ import {
     type TelemetryEventType,
     type TelemetryStatus,
 } from "@/lib/telemetry/types";
+
+/** 遥测 ready 后失效该场旧报告（避免循环依赖 report-service） */
+async function invalidateReportsAfterParse(
+  platform: PubgPlatform,
+  matchId: string,
+): Promise<void> {
+  const needle = `:${platform}:${matchId}:`;
+  cacheDeleteIf((key) => key.startsWith("report:") && key.includes(needle));
+  await deletePersistedReportsForMatch(matchId);
+}
 
 /** 进程内互斥：同一 match 并发 parse 只跑一次 */
 const inflight = new Map<string, Promise<TelemetryAssetMeta>>();
@@ -138,8 +150,13 @@ async function runParse(
       raw = await readRawJson(matchId);
     }
     if (raw == null) {
-      raw = await downloadTelemetryJson(sourceUrl);
-      await writeRawJson(matchId, raw);
+      const text = await downloadTelemetryJson(sourceUrl);
+      try {
+        raw = JSON.parse(text) as unknown;
+      } catch {
+        throw new PubgApiError("遥测内容不是合法 JSON", 500);
+      }
+      await writeRawJson(matchId, text);
     }
 
     const parsed = parseTelemetryJson(raw, {
@@ -167,6 +184,11 @@ async function runParse(
       durationSec: parsed.durationSec,
     };
     await writeMeta(ready);
+    try {
+      await invalidateReportsAfterParse(platform, matchId);
+    } catch {
+      // 报告失效失败不影响遥测结果
+    }
     return ready;
   } catch (e) {
     const expired =

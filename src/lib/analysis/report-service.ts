@@ -1,8 +1,13 @@
 import {generateNoTelemetryReport, type MatchReport, RULE_VERSION_NO_TELEMETRY,} from "@/lib/analysis/report-engine";
 import {generateTelemetryReport, RULE_VERSION_TELEMETRY,} from "@/lib/analysis/report-engine-telemetry";
-import {cacheDelete, cacheGet, cacheSet, TTL} from "@/lib/cache";
+import {cacheDelete, cacheDeleteIf, cacheGet, cacheSet, TTL} from "@/lib/cache";
 import {BizError} from "@/lib/errors";
-import {deletePersistedReport, readPersistedReport, writePersistedReport,} from "@/lib/persist/report-store";
+import {
+    deletePersistedReport,
+    deletePersistedReportsForMatch,
+    readPersistedReport,
+    writePersistedReport,
+} from "@/lib/persist/report-store";
 import {getCachedMatch} from "@/lib/pubg/service";
 import type {PubgPlatform} from "@/lib/pubg/types";
 import {getTelemetryStatus} from "@/lib/telemetry/service";
@@ -154,6 +159,22 @@ export async function invalidateMatchReport(
   }
   try {
     await deletePersistedReport(matchId, accountId);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 遥测解析成功后：失效该 match 下全部报告缓存与磁盘（各 accountId）。
+ */
+export async function invalidateReportsForMatch(
+  platform: PubgPlatform,
+  matchId: string,
+): Promise<void> {
+  const needle = `:${platform}:${matchId}:`;
+  cacheDeleteIf((key) => key.startsWith("report:") && key.includes(needle));
+  try {
+    await deletePersistedReportsForMatch(matchId);
   } catch {
     // ignore
   }

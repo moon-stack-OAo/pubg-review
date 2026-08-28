@@ -4,6 +4,23 @@ type CacheEntry<T> = {
 };
 
 const store = new Map<string, CacheEntry<unknown>>();
+const inflight = new Map<string, Promise<unknown>>();
+const MAX_ENTRIES = 2000;
+
+function evictIfNeeded(): void {
+  if (store.size < MAX_ENTRIES) return;
+  const now = Date.now();
+  for (const [k, e] of store) {
+    if (now > e.expiresAt) store.delete(k);
+  }
+  if (store.size < MAX_ENTRIES) return;
+  const overflow = store.size - MAX_ENTRIES + 1;
+  let n = 0;
+  for (const k of store.keys()) {
+    store.delete(k);
+    if (++n >= overflow) break;
+  }
+}
 
 export function cacheGet<T>(key: string): T | null {
   const hit = store.get(key);
@@ -16,6 +33,7 @@ export function cacheGet<T>(key: string): T | null {
 }
 
 export function cacheSet<T>(key: string, value: T, ttlMs: number): void {
+  evictIfNeeded();
   store.set(key, {
     value,
     expiresAt: Date.now() + ttlMs,
@@ -38,6 +56,18 @@ export function cacheDeleteByPrefix(prefix: string): number {
   return count;
 }
 
+/** 按谓词删除缓存 */
+export function cacheDeleteIf(pred: (key: string) => boolean): number {
+  let count = 0;
+  for (const key of store.keys()) {
+    if (pred(key)) {
+      store.delete(key);
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export async function cacheGetOrSet<T>(
   key: string,
   ttlMs: number,
@@ -47,9 +77,25 @@ export async function cacheGetOrSet<T>(
   if (existing !== null) {
     return { value: existing, cached: true };
   }
-  const value = await loader();
-  cacheSet(key, value, ttlMs);
-  return { value, cached: false };
+
+  const running = inflight.get(key) as Promise<T> | undefined;
+  if (running) {
+    const value = await running;
+    return { value, cached: true };
+  }
+
+  const job = (async () => {
+    const value = await loader();
+    cacheSet(key, value, ttlMs);
+    return value;
+  })();
+  inflight.set(key, job);
+  try {
+    const value = await job;
+    return { value, cached: false };
+  } finally {
+    if (inflight.get(key) === job) inflight.delete(key);
+  }
 }
 
 export const TTL = {

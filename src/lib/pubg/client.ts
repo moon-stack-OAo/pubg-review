@@ -277,7 +277,7 @@ export async function getPlayerSeasonOverview(
   const shard = platformToShard(platform);
   const resolvedSeasonId = seasonId || (await getCurrentSeasonId(platform));
   const data = await pubgFetch<JsonApiResponse>(
-    `/shards/${shard}/players/${accountId}/seasons/${resolvedSeasonId}`,
+    `/shards/${shard}/players/${encodeURIComponent(accountId)}/seasons/${encodeURIComponent(resolvedSeasonId)}`,
   );
 
   const resource = Array.isArray(data.data) ? data.data[0] : data.data;
@@ -309,7 +309,9 @@ export async function getMatchDetail(
   matchId: string,
 ): Promise<PubgMatchDetail> {
   const shard = platformToShard(platform);
-  const data = await pubgFetch<JsonApiResponse>(`/shards/${shard}/matches/${matchId}`);
+  const data = await pubgFetch<JsonApiResponse>(
+    `/shards/${shard}/matches/${encodeURIComponent(matchId)}`,
+  );
   const match = Array.isArray(data.data) ? data.data[0] : data.data;
   if (!match) {
     throw new PubgApiError("对局不存在或已过期", 404);
@@ -424,19 +426,125 @@ export async function getMatchTelemetryUrl(
   return detail.telemetryUrl;
 }
 
+const TELEMETRY_MAX_BYTES = 80 * 1024 * 1024;
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "0.0.0.0" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    return true;
+  }
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[0-2]\d)\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80")) {
+    return true;
+  }
+  return false;
+}
+
+function isAllowedTelemetryHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (host === "telemetry-cdn.pubg.com") return true;
+  if (host === "pubg.com" || host.endsWith(".pubg.com")) return true;
+  if (host === "amazonaws.com" || host.endsWith(".amazonaws.com")) return true;
+  return false;
+}
+
+/** 校验 telemetry CDN URL，防 SSRF */
+export function assertSafeTelemetryUrl(url: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new PubgApiError("遥测 URL 非法", 400);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new PubgApiError("遥测 URL 仅允许 https", 400);
+  }
+  if (parsed.username || parsed.password) {
+    throw new PubgApiError("遥测 URL 非法", 400);
+  }
+  if (isPrivateOrLocalHost(parsed.hostname)) {
+    throw new PubgApiError("遥测 URL 主机不允许", 400);
+  }
+  if (!isAllowedTelemetryHost(parsed.hostname)) {
+    throw new PubgApiError("遥测 URL 不在白名单", 400);
+  }
+  return parsed;
+}
+
+async function readResponseTextLimited(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
+  const contentLength = Number(response.headers.get("content-length") ?? "");
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new PubgApiError("遥测文件过大", 413);
+  }
+
+  if (!response.body) {
+    const text = await response.text();
+    if (text.length > maxBytes) {
+      throw new PubgApiError("遥测文件过大", 413);
+    }
+    return text;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* ignore */
+      }
+      throw new PubgApiError("遥测文件过大", 413);
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8").decode(merged);
+}
+
 /**
- * 下载官方 telemetry JSON（通常不计 API rate limit，无需 Bearer）。
- * 文件可能很大；调用方应落盘后再解析。
+ * 下载官方 telemetry JSON 原文（通常不计 API rate limit，无需 Bearer）。
+ * 返回原始文本便于直接落盘，避免 parse 后再 stringify 双倍拷贝。
  */
-export async function downloadTelemetryJson(url: string): Promise<unknown> {
-  const response = await fetch(url, {
+export async function downloadTelemetryJson(url: string): Promise<string> {
+  const safeUrl = assertSafeTelemetryUrl(url);
+  const response = await fetch(safeUrl.toString(), {
     headers: {
       Accept: "application/json",
       "Accept-Encoding": "gzip",
     },
     cache: "no-store",
+    redirect: "manual",
   });
 
+  if (response.status >= 300 && response.status < 400) {
+    throw new PubgApiError("遥测下载拒绝重定向", 400);
+  }
   if (response.status === 404) {
     throw new PubgApiError("遥测文件不存在或已过期（官方约保留 14 天）", 404);
   }
@@ -444,12 +552,7 @@ export async function downloadTelemetryJson(url: string): Promise<unknown> {
     throw new PubgApiError(`遥测下载失败 HTTP ${response.status}`, response.status);
   }
 
-  const text = await response.text();
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new PubgApiError("遥测内容不是合法 JSON", 500);
-  }
+  return readResponseTextLimited(response, TELEMETRY_MAX_BYTES);
 }
 
 export async function smokeTest(

@@ -411,6 +411,7 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
         ref={canvasRef}
         width={640}
         height={640}
+        aria-label="对局 2D 回放画布"
         className="mx-auto max-h-[70vh] w-full max-w-xl rounded-lg border border-zinc-800 bg-black"
       />
 
@@ -448,6 +449,7 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
           max={Math.max(duration, 1)}
           step={0.1}
           value={t}
+          aria-label="回放进度"
           onChange={(e) => {
             setPlaying(false);
             setT(Number(e.target.value));

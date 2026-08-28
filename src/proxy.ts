@@ -1,13 +1,36 @@
 import type {NextRequest} from "next/server";
 import {NextResponse} from "next/server";
-import {consumeRateLimit, getClientIp} from "@/lib/rate-limit";
+import {consumeRateLimit, getClientIp, getMutationRpm} from "@/lib/rate-limit";
 
 /**
  * Next.js 16：middleware 已更名为 proxy。
- * 仅对 BFF `/api/v1/*` 做 IP 滑动窗口限流。
+ * 对 BFF `/api/v1/*` 与 `/mcp` 做 IP 滑动窗口限流；写操作更严。
  */
+function isMutationRequest(request: NextRequest): boolean {
+  const {pathname, searchParams} = request.nextUrl;
+  if (
+    pathname.includes("/telemetry/parse") ||
+    pathname.includes("/report/rebuild") ||
+    pathname.includes("/history/sync") ||
+    pathname.includes("/refresh")
+  ) {
+    return true;
+  }
+  const force = searchParams.get("force");
+  const refresh = searchParams.get("refresh");
+  if (force === "1" || force === "true") return true;
+  if (refresh === "1" || refresh === "true") return true;
+  return false;
+}
+
 export function proxy(request: NextRequest) {
-  const result = consumeRateLimit(`ip:${getClientIp(request)}`);
+  const ip = getClientIp(request);
+  const mutation = isMutationRequest(request);
+  const key = mutation ? `mut:${ip}` : `ip:${ip}`;
+  const result = consumeRateLimit(
+    key,
+    mutation ? { rpm: getMutationRpm() } : undefined,
+  );
   if (!result.ok) {
     return NextResponse.json(
       {
@@ -31,5 +54,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/v1/:path*"],
+  matcher: ["/api/v1/:path*", "/mcp", "/mcp/:path*"],
 };

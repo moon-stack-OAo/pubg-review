@@ -1,24 +1,33 @@
-import {BizError, fail, ok} from "@/lib/api-response";
-import {isPubgPlatform} from "@/lib/pubg/types";
+import {fail, ok} from "@/lib/api-response";
+import {
+  matchIdSchema,
+  parseOrThrow,
+  platformSchema,
+} from "@/lib/api-schemas";
 import {parseMatchTelemetry} from "@/lib/telemetry/service";
+import {z} from "zod";
 
 type RouteContext = {
   params: Promise<{ matchId: string }>;
 };
 
+const querySchema = z.object({
+  platform: platformSchema,
+  force: z
+    .string()
+    .optional()
+    .transform((v) => v === "1"),
+});
+
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const { matchId } = await context.params;
+    const { matchId: rawMatchId } = await context.params;
+    const matchId = parseOrThrow(matchIdSchema, rawMatchId);
     const { searchParams } = new URL(request.url);
-    const platform = searchParams.get("platform")?.trim() ?? "";
-    const force = searchParams.get("force") === "1";
-
-    if (!isPubgPlatform(platform)) {
-      return fail(new BizError("platform 必须是 steam/kakao/xbox/psn"));
-    }
-    if (!matchId?.trim()) {
-      return fail(new BizError("matchId 不能为空"));
-    }
+    const { platform, force } = parseOrThrow(querySchema, {
+      platform: searchParams.get("platform")?.trim() ?? "",
+      force: searchParams.get("force") ?? undefined,
+    });
 
     const { meta, cached } = await parseMatchTelemetry(platform, matchId, {
       force,

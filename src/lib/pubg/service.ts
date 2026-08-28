@@ -1,5 +1,6 @@
 import {aggregateWeaknessTags, type WeaknessTagSummary,} from "@/lib/analysis/player-analysis-core";
 import {buildMatchReport} from "@/lib/analysis/report-service";
+import type {ReportTagCode} from "@/lib/analysis/report-engine";
 import {cacheDelete, cacheDeleteByPrefix, cacheGet, cacheGetOrSet, cacheSet, TTL,} from "@/lib/cache";
 import {BizError} from "@/lib/errors";
 import type {HistoryMatchRecord} from "@/lib/history/types";
@@ -13,6 +14,7 @@ import {
     getMatchDetail,
     getPlayerSeasonOverview,
     listSeasons,
+    PubgApiError,
     searchPlayerByName,
 } from "@/lib/pubg/client";
 import {mapLabel} from "@/lib/pubg/maps";
@@ -56,16 +58,27 @@ export type PlayerDashboard = {
   };
   /** 近 N 场报告聚合的弱点标签（最多 5） */
   weaknessTags: WeaknessTagSummary[];
+  /** 近 N 场主因标签（与 recentMatches 对齐，供页面展示/过滤，避免二次 build） */
+  primaryTags: Record<
+    string,
+    { code: ReportTagCode; label: string; positive: boolean } | null
+  >;
   /** 近 14 天按日趋势（官方 recent + 本地历史，不额外打官方） */
   trend: PlayerTrend;
   cached: {
     player: boolean;
     season: boolean;
   };
+  /** 赛季等数据是否为 API 失败后的磁盘降级 */
+  degraded?: boolean;
   syncedAt: string;
 };
 
 const REFRESH_COOLDOWN_MS = 60_000;
+const matchInflight = new Map<
+  string,
+  Promise<{ value: PubgMatchDetail; cached: boolean }>
+>();
 
 type RefreshCooldown = {
   lastAt: number;
@@ -110,7 +123,7 @@ export async function getCachedSeason(
   platform: PubgPlatform,
   accountId: string,
   seasonId?: string,
-): Promise<{ value: PubgSeasonOverview; cached: boolean }> {
+): Promise<{ value: PubgSeasonOverview; cached: boolean; stale?: boolean }> {
   const resolvedSeasonId = await resolveSeasonId(platform, seasonId);
   const key = `season:${platform}:${accountId}:${resolvedSeasonId}`;
 
@@ -125,18 +138,29 @@ export async function getCachedSeason(
     return { value: disk.season, cached: true };
   }
 
-  const value = await getPlayerSeasonOverview(
-    platform,
-    accountId,
-    resolvedSeasonId,
-  );
-  cacheSet(key, value, TTL.season);
   try {
-    await writePersistedSeason(value);
-  } catch {
-    // 落盘失败不影响响应
+    const value = await getPlayerSeasonOverview(
+      platform,
+      accountId,
+      resolvedSeasonId,
+    );
+    cacheSet(key, value, TTL.season);
+    try {
+      await writePersistedSeason(value);
+    } catch {
+      // 落盘失败不影响响应
+    }
+    return { value, cached: false };
+  } catch (e) {
+    // 429/5xx：回退磁盘 stale，避免整页空白
+    const status = e instanceof PubgApiError ? e.status : 0;
+    const canStale = status === 429 || status >= 500;
+    if (canStale && disk?.season) {
+      cacheSet(key, disk.season, Math.min(TTL.season, 60_000));
+      return { value: disk.season, cached: true, stale: true };
+    }
+    throw e;
   }
-  return { value, cached: false };
 }
 
 export async function getCachedMatch(
@@ -150,20 +174,31 @@ export async function getCachedMatch(
     return { value: hit, cached: true };
   }
 
-  const disk = await readPersistedMatch(matchId);
-  if (disk) {
-    cacheSet(key, disk, TTL.match);
-    return { value: disk, cached: true };
-  }
+  const running = matchInflight.get(key);
+  if (running) return running;
 
-  const value = await getMatchDetail(platform, matchId);
-  cacheSet(key, value, TTL.match);
+  const job = (async () => {
+    const disk = await readPersistedMatch(matchId, platform);
+    if (disk) {
+      cacheSet(key, disk, TTL.match);
+      return { value: disk, cached: true };
+    }
+
+    const value = await getMatchDetail(platform, matchId);
+    cacheSet(key, value, TTL.match);
+    try {
+      await writePersistedMatch(value, platform);
+    } catch {
+      // 落盘失败不影响响应
+    }
+    return { value, cached: false };
+  })();
+  matchInflight.set(key, job);
   try {
-    await writePersistedMatch(value);
-  } catch {
-    // 落盘失败不影响响应
+    return await job;
+  } finally {
+    if (matchInflight.get(key) === job) matchInflight.delete(key);
   }
-  return { value, cached: false };
 }
 
 export async function getCachedSeasons(
@@ -216,6 +251,11 @@ function historyToRecentRow(m: HistoryMatchRecord): RecentMatchRow {
   };
 }
 
+function matchModeEquals(matchGameMode: string, filter?: string): boolean {
+  if (!filter) return true;
+  return matchGameMode === filter;
+}
+
 export async function getPlayerDashboard(
   platform: PubgPlatform,
   name: string,
@@ -223,6 +263,7 @@ export async function getPlayerDashboard(
 ): Promise<PlayerDashboard> {
   // 默认少拉几场；matches 虽常不计 RPM，但串行更稳，避免瞬时打满连接
   const recentLimit = options?.recentLimit ?? 5;
+  const gameMode = options?.gameMode?.trim() || undefined;
   const playerResult = await getCachedPlayer(platform, name);
   const seasonResult = await getCachedSeason(
     platform,
@@ -231,13 +272,19 @@ export async function getPlayerDashboard(
   );
 
   const accountId = playerResult.value.accountId;
-  const matchIds = playerResult.value.matchIds.slice(0, recentLimit);
+  // 有模式过滤时多取一些 id，过滤后仍尽量凑满 recentLimit（上限 20）
+  const candidateCap = gameMode
+    ? Math.min(Math.max(recentLimit * 3, recentLimit), 20)
+    : recentLimit;
+  const matchIds = playerResult.value.matchIds.slice(0, candidateCap);
   const recentMatches: RecentMatchRow[] = [];
   const detailForHistory: PubgMatchDetail[] = [];
   for (const matchId of matchIds) {
+    if (recentMatches.length >= recentLimit) break;
     try {
       const result = await getCachedMatch(platform, matchId);
       detailForHistory.push(result.value);
+      if (!matchModeEquals(result.value.gameMode, gameMode)) continue;
       recentMatches.push(toRecentRow(result.value, accountId, "official"));
     } catch {
       // 单场失败跳过，不影响整页
@@ -266,16 +313,17 @@ export async function getPlayerDashboard(
   const historyFile = await readPlayerHistory(accountId);
   const localHistoryExtra = (historyFile?.matches ?? [])
     .filter((m) => !officialIds.has(m.matchId))
-    .filter((m) => !options?.gameMode || m.gameMode === options.gameMode)
+    .filter((m) => matchModeEquals(m.gameMode, gameMode))
     .slice(0, 30)
     .map(historyToRecentRow);
 
-  const selectedStats =
-    seasonResult.value.modeStats.find((m) => m.gameMode === options?.gameMode) ??
-    seasonResult.value.modeStats[0] ??
-    null;
+  const selectedStats = gameMode
+    ? (seasonResult.value.modeStats.find((m) => m.gameMode === gameMode) ??
+      null)
+    : (seasonResult.value.modeStats[0] ?? null);
 
   const reports = [];
+  const primaryTags: PlayerDashboard["primaryTags"] = {};
   for (const row of recentMatches) {
     try {
       const { report } = await buildMatchReport(
@@ -284,8 +332,13 @@ export async function getPlayerDashboard(
         accountId,
       );
       reports.push(report);
+      primaryTags[row.matchId] = {
+        code: report.primaryTag.code,
+        label: report.primaryTag.label,
+        positive: report.primaryTag.code === "good_game",
+      };
     } catch {
-      // 单场报告失败不影响 dashboard
+      primaryTags[row.matchId] = null;
     }
   }
 
@@ -312,6 +365,7 @@ export async function getPlayerDashboard(
       knownNames: historyMeta.knownNames,
     },
     weaknessTags: aggregateWeaknessTags(reports, 5),
+    primaryTags,
     trend: buildDailyTrend(
       [
         ...recentMatches.map((m) => ({
@@ -335,6 +389,7 @@ export async function getPlayerDashboard(
       player: playerResult.cached,
       season: seasonResult.cached,
     },
+    degraded: Boolean(seasonResult.stale),
     syncedAt: new Date().toISOString(),
   };
 }

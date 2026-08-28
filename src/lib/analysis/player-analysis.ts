@@ -109,8 +109,17 @@ export async function getPlayerAnalysisByAccount(
   name: string,
   options?: { range?: string },
 ): Promise<PlayerAnalysis> {
-  if (!accountId.trim()) {
+  const id = accountId.trim();
+  if (!id) {
     throw new BizError("accountId 不能为空");
   }
-  return getPlayerAnalysisByName(platform, name, options);
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new BizError("name 不能为空");
+  }
+  const { value: player } = await getCachedPlayer(platform, trimmed);
+  if (player.accountId !== id) {
+    throw new BizError("accountId 与昵称不匹配", 400, 40001);
+  }
+  return getPlayerAnalysisByName(platform, player.name, options);
 }

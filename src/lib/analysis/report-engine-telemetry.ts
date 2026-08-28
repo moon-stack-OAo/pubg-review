@@ -62,8 +62,8 @@ const CONFIDENCE_RANK: Record<TagConfidence, number> = {
 const DEATH_WINDOW_SEC = 20;
 const NEARBY_RADIUS_M = 80;
 const ISOLATED_TEAMMATE_M = 150;
-const LATE_ROTATE_OUTSIDE_M = 0;
-const LATE_ROTATE_EDGE_M = 100;
+/** 圈外距边 ≥ 该米数，或 late 阶段任意圈外，才标 late_rotate（圈内贴边不标） */
+const LATE_ROTATE_OUTSIDE_M = 80;
 
 type DeathContext = {
   deathT: number;
@@ -280,7 +280,7 @@ function buildDeathContext(
       const toCenter = distM(deathX, deathY, safe.x, safe.y);
       const edge = toCenter - safe.radius / CM_PER_M;
       distanceToSafeEdgeM = edge;
-      outsideSafe = edge > LATE_ROTATE_OUTSIDE_M;
+      outsideSafe = edge > 0;
     }
   }
 
@@ -520,26 +520,18 @@ export function generateTelemetryReport(
     }
   }
 
-  // late_rotate
-  if (ctx.distanceToSafeEdgeM != null) {
-    if (
-      ctx.outsideSafe ||
-      ctx.distanceToSafeEdgeM > LATE_ROTATE_OUTSIDE_M ||
-      (ctx.distanceToSafeEdgeM > -LATE_ROTATE_EDGE_M &&
-        ctx.distanceToSafeEdgeM <= LATE_ROTATE_OUTSIDE_M &&
-        phase !== "early")
-    ) {
-      const conf: TagConfidence =
-        ctx.outsideSafe || ctx.distanceToSafeEdgeM > 50 ? "high" : "medium";
-      if (ctx.outsideSafe || ctx.distanceToSafeEdgeM >= -LATE_ROTATE_EDGE_M) {
-        upsertTag(tags, {
-          code: "late_rotate",
-          label: TAG_LABEL.late_rotate,
-          confidence: conf,
-        });
-      }
+  // late_rotate：仅圈外且距边超过阈值，或 late 阶段圈外；圈内贴边不再单独标
+  if (ctx.distanceToSafeEdgeM != null && ctx.outsideSafe) {
+    const farOutside = ctx.distanceToSafeEdgeM >= LATE_ROTATE_OUTSIDE_M;
+    if (farOutside || phase === "late") {
+      upsertTag(tags, {
+        code: "late_rotate",
+        label: TAG_LABEL.late_rotate,
+        confidence: farOutside ? "high" : "medium",
+      });
     }
   } else if (
+    ctx.distanceToSafeEdgeM == null &&
     phase === "late" &&
     metrics.rideDistance < 400 &&
     winPlace != null &&

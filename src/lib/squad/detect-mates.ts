@@ -13,7 +13,7 @@ export async function loadMatchPreferDisk(
   platform: PubgPlatform,
   matchId: string,
 ): Promise<PubgMatchDetail | null> {
-  const disk = await readPersistedMatch(matchId);
+  const disk = await readPersistedMatch(matchId, platform);
   if (disk) return disk;
   try {
     const { value } = await getCachedMatch(platform, matchId);

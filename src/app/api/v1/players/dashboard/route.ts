@@ -1,29 +1,45 @@
-import {BizError, fail, ok} from "@/lib/api-response";
+import {fail, ok} from "@/lib/api-response";
+import {
+  parseOrThrow,
+  platformSchema,
+  playerNameSchema,
+} from "@/lib/api-schemas";
 import {getPlayerDashboard} from "@/lib/pubg/service";
-import {isPubgPlatform} from "@/lib/pubg/types";
+import {z} from "zod";
+
+const querySchema = z.object({
+  platform: platformSchema,
+  name: playerNameSchema,
+  gameMode: z.string().trim().min(1).max(64).optional(),
+  seasonId: z.string().trim().min(1).max(128).optional(),
+  recentLimit: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const n = Number(v ?? "8");
+      if (!Number.isFinite(n)) return 5;
+      return Math.min(Math.max(Math.floor(n), 1), 20);
+    }),
+});
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const platform = searchParams.get("platform")?.trim() ?? "";
-    const name = searchParams.get("name")?.trim() ?? "";
-    const gameMode = searchParams.get("gameMode")?.trim() || undefined;
-    const seasonId = searchParams.get("seasonId")?.trim() || undefined;
-    const recentLimit = Number(searchParams.get("recentLimit") ?? "8");
-
-    if (!isPubgPlatform(platform)) {
-      return fail(new BizError("platform 必须是 steam/kakao/xbox/psn"));
-    }
-    if (!name) {
-      return fail(new BizError("name 不能为空"));
-    }
+    const { platform, name, gameMode, seasonId, recentLimit } = parseOrThrow(
+      querySchema,
+      {
+        platform: searchParams.get("platform")?.trim() ?? "",
+        name: searchParams.get("name")?.trim() ?? "",
+        gameMode: searchParams.get("gameMode")?.trim() || undefined,
+        seasonId: searchParams.get("seasonId")?.trim() || undefined,
+        recentLimit: searchParams.get("recentLimit") ?? undefined,
+      },
+    );
 
     const dashboard = await getPlayerDashboard(platform, name, {
       gameMode,
       seasonId,
-      recentLimit: Number.isFinite(recentLimit)
-        ? Math.min(Math.max(recentLimit, 1), 20)
-        : 5,
+      recentLimit,
     });
 
     return ok(dashboard, {

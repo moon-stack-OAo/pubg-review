@@ -36,17 +36,17 @@ npm run dev
 ## 生产部署（Linux + PM2）
 
 裸机单实例部署说明见 [`deploy/README.md`](deploy/README.md)（含 `ecosystem.config.cjs`、Nginx 示例、备份与安全注意）。  
-要点：Node 20+、**单进程**、持久化 `.data/`、Nginx 反代 HTTPS，MCP 地址为 `https://域名/mcp`。
+要点：Node 20+、 **单进程**、持久化 `.data/`、Nginx 反代 HTTPS，MCP 地址为 `https://域名/mcp`。
 
 ## 当前可用页面
 
-| 路径                                                                   | 说明                                                                  |
-|----------------------------------------------------------------------|---------------------------------------------------------------------|
-| `/`                                                                  | 搜索首页（最近搜索本地缓存）                                                      |
-| `/player/{platform}/{name}?seasonId=&gameMode=&tag=&tab=&vs=&mates=` | 概览（封禁状态 + 近况现状卡）/ 分析 / 武器 / 地图 / 对比 / 车队（`tab=squad&mates=`）        |
-| `/match/{matchId}?platform=&accountId=&name=&tab=`                   | `tab=report\|scoreboard\|timeline\|replay`；积分板可导出 CSV；页头/报告卡可复制分享链接 |
-| `/share/match/{matchId}?platform=&accountId=`                        | 只读分享卡（地图/模式/时间/排名/击杀/伤害/主因标签/摘要）；无 accountId 时仅基础对局信息               |
-| `/favorites`                                                         | 本机收藏玩家（localStorage）                                                |
+| 路径                                                                 | 说明                                                                                     |
+|----------------------------------------------------------------------|------------------------------------------------------------------------------------------|
+| `/`                                                                  | 搜索首页（最近搜索本地缓存）                                                             |
+| `/player/{platform}/{name}?seasonId=&gameMode=&tag=&tab=&vs=&mates=` | 概览（封禁状态 + 近况现状卡）/ 分析 / 武器 / 地图 / 对比 / 车队（`tab=squad&mates=`）    |
+| `/match/{matchId}?platform=&accountId=&name=&tab=`                   | `tab=report\|scoreboard\|timeline\|replay`；积分板可导出 CSV；页头/报告卡可复制分享链接  |
+| `/share/match/{matchId}?platform=&accountId=`                        | 只读分享卡（地图/模式/时间/排名/击杀/伤害/主因标签/摘要）；无 accountId 时仅基础对局信息 |
+| `/favorites`                                                         | 本机收藏玩家（localStorage）                                                             |
 
 玩家页 Tab：`overview`（默认）· `analysis` · `weapons` · `maps` · `compare`（`vs=` 另一昵称）· `squad`（`mates=` 最多 3 人）
 
@@ -81,49 +81,49 @@ http://<本机局域网IP>:3000/mcp
 }
 ```
 
-| Tool | 说明 |
-|------|------|
-| `search_player` | 搜索玩家（platform + name） |
-| `get_player_dashboard` | 玩家战绩概览 |
-| `get_player_form` | 近况 formStatus + 异常 anomalies |
-| `get_player_analysis` | 近 N 场报告聚合（雷达/弱点/建议） |
-| `get_match` | 对局详情 |
-| `get_match_report` | 对局复盘报告 |
-| `compare_players` | 两人赛季 KPI 对比 |
-| `get_squad_stats` | 车队同场统计 |
-| `suggest_squad_mates` | 常一起 Top3 队友建议 |
-| `get_player_weapons` | 武器/战斗聚合（本地历史） |
-| `get_player_maps` | 地图聚合（本地历史） |
-| `list_seasons` | 赛季列表 |
-| `list_player_history` | 本地历史库列表 |
+| Tool                   | 说明                              |
+|------------------------|-----------------------------------|
+| `search_player`        | 搜索玩家（platform + name）       |
+| `get_player_dashboard` | 玩家战绩概览                      |
+| `get_player_form`      | 近况 formStatus + 异常 anomalies  |
+| `get_player_analysis`  | 近 N 场报告聚合（雷达/弱点/建议） |
+| `get_match`            | 对局详情                          |
+| `get_match_report`     | 对局复盘报告                      |
+| `compare_players`      | 两人赛季 KPI 对比                 |
+| `get_squad_stats`      | 车队同场统计                      |
+| `suggest_squad_mates`  | 常一起 Top3 队友建议              |
+| `get_player_weapons`   | 武器/战斗聚合（本地历史）         |
+| `get_player_maps`      | 地图聚合（本地历史）              |
+| `list_seasons`         | 赛季列表                          |
+| `list_player_history`  | 本地历史库列表                    |
 
 > Tools 直接复用服务层，不经 `/api/v1` HTTP 自调用。仅局域网同网段可直连；公网需隧道或部署。
 
 ## API
 
-| 路径                                                                                      | 说明                                                |
-|-----------------------------------------------------------------------------------------|---------------------------------------------------|
-| `GET /api/v1/smoke`                                                                     | 连通性冒烟                                             |
-| `GET /api/v1/players/search`                                                            | 搜索玩家（含官方 `banType`）                               |
+| 路径                                                                                    | 说明                                                            |
+|-----------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| `GET /api/v1/smoke`                                                                     | 连通性冒烟                                                      |
+| `GET /api/v1/players/search`                                                            | 搜索玩家（含官方 `banType`）                                    |
 | `GET /api/v1/players/dashboard`                                                         | 玩家页聚合（含 `weaknessTags`、`trend`、历史落盘）              |
-| `GET /api/v1/players/analysis?platform=&name=&range=20m`                                | 近 N 场报告聚合                                         |
-| `GET /api/v1/players/form?platform=&name=&gameMode=squad&seasonId=&limit=20`            | 近况 formStatus + 异常 anomalies（串行缓存优先）              |
-| `GET /api/v1/players/compare?platform=&nameA=&nameB=&gameMode=`                         | 两人赛季 KPI 对比                                       |
-| `GET /api/v1/players/{accountId}/overview`                                              | 赛季概览                                              |
-| `POST /api/v1/players/{accountId}/refresh?platform=&name=`                              | 手动刷新（60s 冷却，业务码 40901）                            |
-| `GET /api/v1/players/{accountId}/history`                                               | 本地历史库列表                                           |
-| `POST /api/v1/players/{accountId}/history/sync?platform=&name=`                         | 同步近况入库（90s 冷却）                                    |
-| `GET /api/v1/players/{accountId}/weapons`                                               | 武器/战斗聚合                                           |
-| `GET /api/v1/players/{accountId}/maps`                                                  | 地图聚合                                              |
-| `GET /api/v1/meta/seasons?platform=`                                                    | 赛季列表                                              |
+| `GET /api/v1/players/analysis?platform=&name=&range=20m`                                | 近 N 场报告聚合                                                 |
+| `GET /api/v1/players/form?platform=&name=&gameMode=squad&seasonId=&limit=20`            | 近况 formStatus + 异常 anomalies（串行缓存优先）                |
+| `GET /api/v1/players/compare?platform=&nameA=&nameB=&gameMode=`                         | 两人赛季 KPI 对比                                               |
+| `GET /api/v1/players/{accountId}/overview`                                              | 赛季概览                                                        |
+| `POST /api/v1/players/{accountId}/refresh?platform=&name=`                              | 手动刷新（60s 冷却，业务码 40901）                              |
+| `GET /api/v1/players/{accountId}/history`                                               | 本地历史库列表                                                  |
+| `POST /api/v1/players/{accountId}/history/sync?platform=&name=`                         | 同步近况入库（90s 冷却）                                        |
+| `GET /api/v1/players/{accountId}/weapons`                                               | 武器/战斗聚合                                                   |
+| `GET /api/v1/players/{accountId}/maps`                                                  | 地图聚合                                                        |
+| `GET /api/v1/meta/seasons?platform=`                                                    | 赛季列表                                                        |
 | `GET /api/v1/meta/sync-logs?limit=50`                                                   | 开发用：上游调用日志（生产 403）                                |
-| `GET /api/v1/matches/{matchId}`                                                         | 对局详情（含 `telemetryStatus`，不暴露 CDN URL）             |
+| `GET /api/v1/matches/{matchId}`                                                         | 对局详情（含 `telemetryStatus`，不暴露 CDN URL）                |
 | `GET /api/v1/matches/{matchId}/report?platform=&accountId=`                             | 复盘报告（telemetry ready 则 `1.1.0-telemetry` 增强，否则降级） |
 | `POST /api/v1/matches/{matchId}/report/rebuild?platform=&accountId=`                    | 调试重算（清缓存后优先增强）                                    |
-| `POST /api/v1/matches/{matchId}/telemetry/parse?platform=`                              | 下载+解析遥测（幂等）                                       |
-| `GET /api/v1/matches/{matchId}/telemetry/events?platform=&accountId=&types=&sampleHz=`  | 精简事件流（可自动 parse）                                  |
-| `GET /api/v1/squad/stats?platform=&name=&mates=A,B,C&limit=20&gameMode=squad&refresh=1` | 车队同场统计（齐全场聚合；`mateIds=`；`refresh=1` 绕过缓存）         |
-| `GET /api/v1/squad/suggest-mates?platform=&name=&scan=12`                               | 近 N 场常一起 Top3 队友建议                                |
+| `POST /api/v1/matches/{matchId}/telemetry/parse?platform=`                              | 下载+解析遥测（幂等）                                           |
+| `GET /api/v1/matches/{matchId}/telemetry/events?platform=&accountId=&types=&sampleHz=`  | 精简事件流（可自动 parse）                                      |
+| `GET /api/v1/squad/stats?platform=&name=&mates=A,B,C&limit=20&gameMode=squad&refresh=1` | 车队同场统计（齐全场聚合；`mateIds=`；`refresh=1` 绕过缓存）    |
+| `GET /api/v1/squad/suggest-mates?platform=&name=&scan=12`                               | 近 N 场常一起 Top3 队友建议                                     |
 
 ## `.data/` 目录结构（已 gitignore）
 
@@ -139,7 +139,7 @@ http://<本机局域网IP>:3000/mcp
   logs/api-sync.jsonl             # 上游调用简易日志（无 Key）
 ```
 
-读取优先级（match / report）：**内存 → 磁盘 → 官方/生成**。重启 `next dev` 后内存清空，磁盘仍可恢复。  
+读取优先级（match / report）： **内存 → 磁盘 → 官方/生成**。重启 `next dev` 后内存清空，磁盘仍可恢复。  
 车队统计：磁盘 fresh 命中则直接返回；miss / `refresh=1` 时串行扫 match（磁盘优先）。
 
 ## 本地历史库（M4）
@@ -161,7 +161,7 @@ http://<本机局域网IP>:3000/mcp
 ## Telemetry（M3）
 
 - 服务端从 match included 取 telemetry URL → 下载到 `.data/telemetry/{matchId}/`
-- 解析为精简 `events.json`（轨迹 ~1Hz、击杀/倒地/救援/空投/圈、**枪线 gunlines**）
+- 解析为精简 `events.json`（轨迹 ~1Hz、击杀/倒地/救援/空投/圈、 **枪线 gunlines**）
 - 回放图层可开「枪线」（短时淡出；无数据时开关禁用）
 - **浏览器只调 BFF**，禁止直拉官方超大 JSON
 - 详见 `docs/04-Telemetry解析说明.md`
@@ -186,15 +186,15 @@ curl "http://127.0.0.1:3000/api/v1/squad/stats?platform=steam&name=Nick&mates=A,
 
 ## 缓存（内存 + `.data` 落盘）
 
-| 数据                      | 内存 TTL | 磁盘                                         |
-|-------------------------|--------|--------------------------------------------|
-| 玩家名 → 资料                | 30 min | —                                          |
-| 赛季统计                    | 10 min | `.data/seasons/...`（同 TTL 视为 fresh）        |
-| 赛季列表                    | 6 h    | —                                          |
-| 对局详情                    | 24 h   | `.data/matches/{matchId}.json`（不可变长缓存）     |
-| 复盘报告（key 含 ruleVersion） | 7 d    | `.data/reports/{matchId}/{accountId}.json` |
-| 遥测精简 / 历史库              | —      | `.data/telemetry` / `.data/history`        |
-| 车队同场统计                  | —      | `.data/squad/{hash}.json`（TTL ~20 min）     |
+| 数据                           | 内存 TTL | 磁盘                                           |
+|--------------------------------|----------|------------------------------------------------|
+| 玩家名 → 资料                  | 30 min   | —                                              |
+| 赛季统计                       | 10 min   | `.data/seasons/...`（同 TTL 视为 fresh）       |
+| 赛季列表                       | 6 h      | —                                              |
+| 对局详情                       | 24 h     | `.data/matches/{matchId}.json`（不可变长缓存） |
+| 复盘报告（key 含 ruleVersion） | 7 d      | `.data/reports/{matchId}/{accountId}.json`     |
+| 遥测精简 / 历史库              | —        | `.data/telemetry` / `.data/history`            |
+| 车队同场统计                   | —        | `.data/squad/{hash}.json`（TTL ~20 min）       |
 
 刷新接口会失效该玩家的 name/season 缓存后重拉；同一 match 走内存或磁盘不重复打官方。
 

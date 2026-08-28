@@ -1,11 +1,21 @@
 import {promises as fs} from "fs";
 import path from "path";
+import {safeSegment} from "@/lib/persist/fs-json";
 import type {ParsedTelemetry, TelemetryAssetMeta} from "@/lib/telemetry/types";
 
-const ROOT = path.join(process.cwd(), ".data", "telemetry");
+const ROOT = path.resolve(path.join(process.cwd(), ".data", "telemetry"));
 
 function matchDir(matchId: string): string {
-  return path.join(ROOT, matchId);
+  const segment = safeSegment(matchId);
+  if (!segment || segment === "." || segment === "..") {
+    throw new Error("非法 matchId");
+  }
+  const dir = path.resolve(ROOT, segment);
+  const rootPrefix = ROOT.endsWith(path.sep) ? ROOT : ROOT + path.sep;
+  if (dir !== ROOT && !dir.startsWith(rootPrefix)) {
+    throw new Error("非法 matchId：路径越界");
+  }
+  return dir;
 }
 
 export function metaPath(matchId: string): string {
@@ -46,7 +56,8 @@ export async function writeRawJson(
 ): Promise<string> {
   await ensureDir(matchId);
   const file = rawPath(matchId);
-  await fs.writeFile(file, JSON.stringify(data), "utf8");
+  const text = typeof data === "string" ? data : JSON.stringify(data);
+  await fs.writeFile(file, text, "utf8");
   return file;
 }
 

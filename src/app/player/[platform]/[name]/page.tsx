@@ -14,7 +14,6 @@ import {Card, ErrorBox, Kpi, PageShell} from "@/components/ui";
 import {RadarBars, WeaknessTagChips} from "@/components/weakness-tags";
 import {getPlayerAnalysisByName, type PlayerAnalysis,} from "@/lib/analysis/player-analysis";
 import {getPlayerFormAnalysis, type PlayerFormAnalysis,} from "@/lib/analysis/player-form";
-import {buildMatchReport} from "@/lib/analysis/report-service";
 import type {ReportTagCode} from "@/lib/analysis/report-engine";
 import {EMPTY_RECENT_MATCHES, friendlyErrorMessage} from "@/lib/errors";
 import {formatDateTime, formatDuration, formatNumber, formatPercent, rankClass,} from "@/lib/format";
@@ -62,6 +61,14 @@ function parseSquadLimit(raw: string | undefined): number {
   return Math.min(Math.max(Math.floor(n), 1), 32);
 }
 
+function safeDecodeURIComponent(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 type PrimaryTagInfo = {
   code: ReportTagCode;
   label: string;
@@ -80,16 +87,15 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
     limit: limitParam = "",
     refresh: refreshParam = "",
   } = await searchParams;
-  const name = decodeURIComponent(nameParam);
+  const name = safeDecodeURIComponent(nameParam);
   const seasonId = seasonIdParam.trim() || undefined;
   const activeTag = tagParam.trim() || undefined;
   const tab = parsePlayerTab(tabParam);
   const vs = vsParam.trim() || undefined;
   const mateNames = parseMateNames(matesParam);
   const squadLimit = parseSquadLimit(limitParam);
-  // 车队 Tab：未指定 gameMode 时默认 squad；其它 Tab 保持原语义（空=默认场次最多）
-  const squadGameMode =
-    tab === "squad" ? gameMode.trim() || "squad" : gameMode;
+  // 车队 Tab：未指定 gameMode 时不过滤（避免默认 squad 漏掉 squad-fpp）；其它 Tab 保持原语义
+  const squadGameMode = tab === "squad" ? gameMode.trim() : gameMode;
 
   if (!isPubgPlatform(platform)) {
     return (
@@ -115,90 +121,122 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
   const primaryTags = new Map<string, PrimaryTagInfo | null>();
 
   try {
-    const [dashboard, seasonsResult, formResult] = await Promise.all([
+    const seasonsPromise = getCachedSeasons(platform);
+    // 页头仍要 player/season；非 overview 用 recentLimit:0 跳过近场报告
+    const headerDashboard = () =>
       getPlayerDashboard(platform, name, {
         gameMode: gameMode || undefined,
         seasonId,
-        recentLimit: 5,
-      }),
-      getCachedSeasons(platform),
-      getPlayerFormAnalysis(platform, name, {
-        gameMode: gameMode || undefined,
-        seasonId,
-      }).then(
-        (value) => ({ ok: true as const, value }),
-        (e: unknown) => ({
-          ok: false as const,
-          error: friendlyErrorMessage(e),
-        }),
-      ),
-    ]);
-    data = dashboard;
-    seasons = seasonsResult.value;
-    if (formResult.ok) {
-      formAnalysis = formResult.value;
-    } else {
-      formError = formResult.error;
-    }
-
-    for (const m of data.recentMatches) {
-      try {
-        const { report } = await buildMatchReport(
-          platform,
-          m.matchId,
-          data.player.accountId,
-        );
-        primaryTags.set(m.matchId, {
-          code: report.primaryTag.code,
-          label: report.primaryTag.label,
-          positive: report.primaryTag.code === "good_game",
-        });
-      } catch {
-        primaryTags.set(m.matchId, null);
-      }
-    }
-
-    if (tab === "analysis") {
-      analysis = await getPlayerAnalysisByName(platform, name, {
-        range: "20m",
+        recentLimit: 0,
       });
+
+    if (tab === "overview") {
+      const [dashboard, seasonsResult, formResult] = await Promise.all([
+        getPlayerDashboard(platform, name, {
+          gameMode: gameMode || undefined,
+          seasonId,
+          recentLimit: 5,
+        }),
+        seasonsPromise,
+        getPlayerFormAnalysis(platform, name, {
+          gameMode: gameMode || undefined,
+          seasonId,
+        }).then(
+          (value) => ({ ok: true as const, value }),
+          (e: unknown) => ({
+            ok: false as const,
+            error: friendlyErrorMessage(e),
+          }),
+        ),
+      ]);
+      data = dashboard;
+      seasons = seasonsResult.value;
+      if (formResult.ok) {
+        formAnalysis = formResult.value;
+      } else {
+        formError = formResult.error;
+      }
+      for (const [matchId, tag] of Object.entries(dashboard.primaryTags)) {
+        primaryTags.set(matchId, tag);
+      }
+    } else if (tab === "analysis") {
+      const [dashboard, seasonsResult, analysisResult] = await Promise.all([
+        headerDashboard(),
+        seasonsPromise,
+        getPlayerAnalysisByName(platform, name, { range: "20m" }),
+      ]);
+      data = dashboard;
+      seasons = seasonsResult.value;
+      analysis = analysisResult;
     } else if (tab === "weapons") {
-      weapons = await getWeaponsTabData(data.player.accountId, {
+      const [dashboard, seasonsResult] = await Promise.all([
+        headerDashboard(),
+        seasonsPromise,
+      ]);
+      data = dashboard;
+      seasons = seasonsResult.value;
+      weapons = await getWeaponsTabData(dashboard.player.accountId, {
         gameMode: gameMode || undefined,
         limit: 20,
       });
     } else if (tab === "maps") {
-      maps = await getMapsTabData(data.player.accountId, {
+      const [dashboard, seasonsResult] = await Promise.all([
+        headerDashboard(),
+        seasonsPromise,
+      ]);
+      data = dashboard;
+      seasons = seasonsResult.value;
+      maps = await getMapsTabData(dashboard.player.accountId, {
         gameMode: gameMode || undefined,
         limit: 50,
       });
-    } else if (tab === "compare" && vs) {
-      try {
-        compareLeft = await buildCompareSide(platform, name, {
-          gameMode: gameMode || undefined,
-          seasonId,
-        });
-        compareRight = await buildCompareSide(platform, vs, {
-          gameMode: gameMode || undefined,
-          seasonId,
-        });
-      } catch (e) {
-        compareError = friendlyErrorMessage(e);
+    } else if (tab === "compare") {
+      const [dashboard, seasonsResult] = await Promise.all([
+        headerDashboard(),
+        seasonsPromise,
+      ]);
+      data = dashboard;
+      seasons = seasonsResult.value;
+      if (vs) {
+        try {
+          const [left, right] = await Promise.all([
+            buildCompareSide(platform, name, {
+              gameMode: gameMode || undefined,
+              seasonId,
+            }),
+            buildCompareSide(platform, vs, {
+              gameMode: gameMode || undefined,
+              seasonId,
+            }),
+          ]);
+          compareLeft = left;
+          compareRight = right;
+        } catch (e) {
+          compareError = friendlyErrorMessage(e);
+        }
       }
-    } else if (tab === "squad" && mateNames.length > 0) {
-      try {
-        const squadRefresh =
-          refreshParam === "1" || refreshParam === "true";
-        squadStats = await getSquadStats({
-          platform,
-          playerName: name,
-          mateNames,
-          limit: squadLimit,
-          gameMode: squadGameMode,
-          refresh: squadRefresh,
-        });
-      } catch (e) {
-        squadError = friendlyErrorMessage(e);
+    } else if (tab === "squad") {
+      const [dashboard, seasonsResult] = await Promise.all([
+        headerDashboard(),
+        seasonsPromise,
+      ]);
+      data = dashboard;
+      seasons = seasonsResult.value;
+      if (mateNames.length > 0) {
+        try {
+          const squadRefresh =
+            refreshParam === "1" || refreshParam === "true";
+          squadStats = await getSquadStats({
+            platform,
+            playerName: name,
+            mateNames,
+            limit: squadLimit,
+            gameMode: squadGameMode,
+            refresh: squadRefresh,
+          });
+        } catch (e) {
+          squadError = friendlyErrorMessage(e);
+        }
       }
     }
   } catch (e) {

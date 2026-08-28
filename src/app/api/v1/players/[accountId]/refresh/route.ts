@@ -1,28 +1,34 @@
-import {BizError, fail, ok} from "@/lib/api-response";
+import {fail, ok} from "@/lib/api-response";
+import {
+  accountIdSchema,
+  parseOrThrow,
+  platformSchema,
+  playerNameSchema,
+} from "@/lib/api-schemas";
 import {refreshPlayer} from "@/lib/pubg/service";
-import {isPubgPlatform} from "@/lib/pubg/types";
+import {z} from "zod";
 
 type RouteContext = {
   params: Promise<{ accountId: string }>;
 };
 
+const querySchema = z.object({
+  platform: platformSchema,
+  name: playerNameSchema,
+  seasonId: z.string().trim().min(1).max(128).optional(),
+});
+
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const { accountId } = await context.params;
+    const { accountId: rawAccountId } = await context.params;
+    const accountId = parseOrThrow(accountIdSchema, rawAccountId);
     const { searchParams } = new URL(request.url);
-    const platform = searchParams.get("platform")?.trim() ?? "";
-    const name = searchParams.get("name")?.trim() ?? "";
-    const seasonId = searchParams.get("seasonId")?.trim() || undefined;
-
-    if (!isPubgPlatform(platform)) {
-      return fail(new BizError("platform 必须是 steam/kakao/xbox/psn"));
-    }
-    if (!accountId) {
-      return fail(new BizError("accountId 不能为空"));
-    }
-    if (!name) {
-      return fail(new BizError("name 不能为空（刷新需按昵称重拉玩家资料）"));
-    }
+    const seasonRaw = searchParams.get("seasonId")?.trim() || undefined;
+    const { platform, name, seasonId } = parseOrThrow(querySchema, {
+      platform: searchParams.get("platform")?.trim() ?? "",
+      name: searchParams.get("name")?.trim() ?? "",
+      seasonId: seasonRaw,
+    });
 
     const result = await refreshPlayer(platform, accountId, name, { seasonId });
     return ok(result, { cooldownSec: result.cooldownSec });

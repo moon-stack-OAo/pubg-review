@@ -59,13 +59,14 @@ export function friendlyErrorMessage(error: unknown): string {
     if (error.status >= 500) {
       return "PUBG 官方接口异常，请稍后重试";
     }
-    return error.message;
+    if (error.status === 401 || error.status === 403) {
+      return "官方接口鉴权失败，请检查服务端配置";
+    }
+    return "请求失败，请稍后重试";
   }
 
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "加载失败，请稍后重试";
+  console.error("[friendlyErrorMessage]", error);
+  return "服务暂时不可用";
 }
 
 export const EMPTY_RECENT_MATCHES =

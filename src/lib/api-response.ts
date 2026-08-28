@@ -56,9 +56,9 @@ export function fail(error: unknown) {
   }
 
   const body: ApiBody<null> = {
-    code: 40001,
+    code: 50001,
     message: friendlyErrorMessage(error),
     data: null,
   };
-  return NextResponse.json(body, { status: 400 });
+  return NextResponse.json(body, { status: 500 });
 }

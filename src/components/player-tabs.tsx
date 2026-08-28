@@ -95,6 +95,7 @@ export function PlayerTabNav({
               mates: item.id === "squad" ? mates : undefined,
               limit: item.id === "squad" ? limit : undefined,
             })}
+            aria-current={active ? "page" : undefined}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               active
                 ? "border-amber-500 text-amber-300"

@@ -87,6 +87,21 @@ function rate(num: number, den: number): number | null {
   return Number((num / den).toFixed(4));
 }
 
+/** squad 匹配 squad/squad-fpp；duo 匹配 duo/duo-fpp；精确值仍精确匹配 */
+function matchGameModeFamily(
+  matchGameMode: string,
+  filter: string | null,
+): boolean {
+  if (!filter) return true;
+  const m = matchGameMode.toLowerCase();
+  const f = filter.toLowerCase();
+  if (m === f) return true;
+  if (f === "squad" || f === "duo" || f === "solo") {
+    return m === f || m.startsWith(`${f}-`);
+  }
+  return false;
+}
+
 type Acc = {
   accountId: string;
   name: string;
@@ -278,7 +293,7 @@ async function computeSquadStats(args: {
   for (const matchId of matchIds) {
     const match = await loadMatchPreferDisk(platform, matchId);
     if (!match) continue;
-    if (gameMode && match.gameMode !== gameMode) continue;
+    if (!matchGameModeFamily(match.gameMode, gameMode)) continue;
 
     scanned += 1;
     const roster = findRosterOf(match, player.accountId);

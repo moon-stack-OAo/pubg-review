@@ -1,27 +1,31 @@
-import {BizError, fail, ok} from "@/lib/api-response";
+import {fail, ok} from "@/lib/api-response";
+import {
+  accountIdSchema,
+  matchIdSchema,
+  parseOrThrow,
+  platformSchema,
+} from "@/lib/api-schemas";
 import {rebuildMatchReport} from "@/lib/analysis/report-service";
-import {isPubgPlatform} from "@/lib/pubg/types";
+import {z} from "zod";
 
 type RouteContext = {
   params: Promise<{ matchId: string }>;
 };
 
+const querySchema = z.object({
+  platform: platformSchema,
+  accountId: accountIdSchema,
+});
+
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const { matchId } = await context.params;
+    const { matchId: rawMatchId } = await context.params;
+    const matchId = parseOrThrow(matchIdSchema, rawMatchId);
     const { searchParams } = new URL(request.url);
-    const platform = searchParams.get("platform")?.trim() ?? "";
-    const accountId = searchParams.get("accountId")?.trim() ?? "";
-
-    if (!isPubgPlatform(platform)) {
-      return fail(new BizError("platform 必须是 steam/kakao/xbox/psn"));
-    }
-    if (!matchId) {
-      return fail(new BizError("matchId 不能为空"));
-    }
-    if (!accountId) {
-      return fail(new BizError("accountId 不能为空"));
-    }
+    const { platform, accountId } = parseOrThrow(querySchema, {
+      platform: searchParams.get("platform")?.trim() ?? "",
+      accountId: searchParams.get("accountId")?.trim() ?? "",
+    });
 
     const { report } = await rebuildMatchReport(platform, matchId, accountId);
     return ok(report, {
