@@ -126,9 +126,7 @@ export function TrendChart({ trend }: { trend: PlayerTrend }) {
                   stroke="currentColor"
                   strokeWidth={1.5}
                 >
-                  <title>
-                    {c.date}: {c.value}
-                  </title>
+                  <title>{`${c.date}: ${c.value}`}</title>
                 </circle>
               ),
             )}

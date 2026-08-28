@@ -65,7 +65,7 @@ export function SyncHistoryButton({
   }, [accountId, loading, name, platform, router]);
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="relative">
       <button
         type="button"
         onClick={onClick}
@@ -75,7 +75,11 @@ export function SyncHistoryButton({
       >
         {loading ? "同步中…" : "同步近况"}
       </button>
-      {hint ? <span className="max-w-[14rem] text-right text-xs text-zinc-500">{hint}</span> : null}
+      {hint ? (
+        <span className="absolute top-full right-0 z-10 mt-1 max-w-[14rem] whitespace-nowrap text-right text-xs text-zinc-500">
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }

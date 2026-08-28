@@ -292,7 +292,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
           ) : null}
         </div>
         {data ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             <FavoriteButton
               accountId={data.player.accountId}
               platform={platform}

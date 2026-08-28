@@ -67,7 +67,7 @@ export function RefreshButton({
   }, [accountId, loading, name, platform, router, seasonId]);
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="relative">
       <button
         type="button"
         onClick={onClick}
@@ -76,7 +76,11 @@ export function RefreshButton({
       >
         {loading ? "刷新中…" : "刷新"}
       </button>
-      {hint ? <span className="text-xs text-zinc-500">{hint}</span> : null}
+      {hint ? (
+        <span className="absolute top-full right-0 z-10 mt-1 whitespace-nowrap text-right text-xs text-zinc-500">
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
