@@ -9,14 +9,14 @@
 ### Added
 
 - Remote MCP Tools 扩展至 13 个（直接复用服务层）：
-  - `get_player_form` — 近况 formStatus + 异常 anomalies
-  - `get_player_analysis` — 近 N 场报告聚合（雷达 / 弱点 / 建议）
-  - `get_squad_stats` — 车队同场统计
-  - `suggest_squad_mates` — 常一起 Top3 队友建议
-  - `get_player_weapons` — 武器 / 战斗聚合（本地历史）
-  - `get_player_maps` — 地图聚合（本地历史）
-  - `list_seasons` — 赛季列表
-  - `list_player_history` — 本地历史库列表
+    - `get_player_form` — 近况 formStatus + 异常 anomalies
+    - `get_player_analysis` — 近 N 场报告聚合（雷达 / 弱点 / 建议）
+    - `get_squad_stats` — 车队同场统计
+    - `suggest_squad_mates` — 常一起 Top3 队友建议
+    - `get_player_weapons` — 武器 / 战斗聚合（本地历史）
+    - `get_player_maps` — 地图聚合（本地历史）
+    - `list_seasons` — 赛季列表
+    - `list_player_history` — 本地历史库列表
 - Linux 裸 Node + PM2 部署材料：`deploy/README.md`、`deploy/ecosystem.config.cjs`、`deploy/nginx.conf.example`
 - 环境变量 `MCP_ENABLED`：控制 `/mcp` 开关（`true` / `1` / `on` / `yes` 开启）
 - Remote MCP Bearer 鉴权：环境变量 `MCP_TOKEN`；请求头 `Authorization: Bearer <token>`
@@ -28,15 +28,15 @@
 - 玩家页对局列表：排序（时间/排名/击杀/伤害）+ 分页 + URL `sort`/`page`
 - 对比 Tab：近况/弱点并排；收藏/最近搜索快捷填 `vs=`
 - 分享页动态 OG 图：`/share/match/{id}/og`；分享卡对齐增强/降级态（ruleVersion/置信度/建议）
-- 半成品治理清单：`半成品清单.md`；deploy 备份脚本示例与单机 SLA 说明
+- deploy 备份脚本示例与单机 SLA 说明
 
 ### Changed
 
 - Remote MCP **默认关闭**；未显式开启时 `/mcp` 返回 404
 - `npm start` 固定监听 `0.0.0.0:3000`
-- README：补充生产部署入口、MCP 开关 / Token 说明与完整 Tool 表
+- README 重写：按「快速开始 / 功能 / 路由 / 部署 / MCP / API / 数据与缓存 / 限流」重组，去掉半成品 backlog 口吻
 - 分析 Tab：样本 &lt; 5 场隐藏假雷达，展示「样本不足」
-- README / docs/04：对齐遥测增强报告 `1.1.0-telemetry` 真实行为（不再写「后续开放」）
+- docs/04：对齐遥测增强报告 `1.1.0-telemetry` 真实行为（不再写「后续开放」）
 - Redis 全面接入标注暂缓；提额材料补齐人工提交勾选说明（不伪造已公网/已提额）
 
 ### Security
