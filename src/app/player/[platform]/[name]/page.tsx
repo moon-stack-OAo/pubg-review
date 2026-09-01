@@ -126,9 +126,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
   const squadLimit = parseSquadLimit(limitParam);
   const matchSort = parseMatchSort(sortParam.trim() || undefined);
   const matchPageRaw = parseMatchPage(pageParam.trim() || undefined);
-  // 车队 Tab：未指定 gameMode 时默认 squad；其它 Tab 保持原语义（空=默认场次最多）
-  const squadGameMode =
-    tab === "squad" ? gameMode.trim() || "squad" : gameMode;
   // 车队 Tab：未指定 gameMode 时不过滤（避免默认 squad 漏掉 squad-fpp）；其它 Tab 保持原语义
   const squadGameMode = tab === "squad" ? gameMode.trim() : gameMode;
 
@@ -158,46 +155,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
   const primaryTags = new Map<string, PrimaryTagInfo | null>();
 
   try {
-    const [dashboard, seasonsResult, formResult] = await Promise.all([
-      getPlayerDashboard(platform, name, {
-        gameMode: gameMode || undefined,
-        seasonId,
-        recentLimit: 20,
-      }),
-      getCachedSeasons(platform),
-      getPlayerFormAnalysis(platform, name, {
-        gameMode: gameMode || undefined,
-        seasonId,
-      }).then(
-        (value) => ({ ok: true as const, value }),
-        (e: unknown) => ({
-          ok: false as const,
-          error: friendlyErrorMessage(e),
-        }),
-      ),
-    ]);
-    data = dashboard;
-    seasons = seasonsResult.value;
-    if (formResult.ok) {
-      formAnalysis = formResult.value;
-    } else {
-      formError = formResult.error;
-    }
-
-    for (const m of data.recentMatches) {
-      try {
-        const { report } = await buildMatchReport(
-          platform,
-          m.matchId,
-          data.player.accountId,
-        );
-        primaryTags.set(m.matchId, {
-          code: report.primaryTag.code,
-          label: report.primaryTag.label,
-          positive: report.primaryTag.code === "good_game",
-        });
-      } catch {
-        primaryTags.set(m.matchId, null);
     const seasonsPromise = getCachedSeasons(platform);
     // 页头仍要 player/season；非 overview 用 recentLimit:0 跳过近场报告
     const headerDashboard = () =>
@@ -212,7 +169,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
         getPlayerDashboard(platform, name, {
           gameMode: gameMode || undefined,
           seasonId,
-          recentLimit: 5,
+          recentLimit: 20, // 本地分页需要更多场次
         }),
         seasonsPromise,
         getPlayerFormAnalysis(platform, name, {
@@ -233,7 +190,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
       } else {
         formError = formResult.error;
       }
-      for (const [matchId, tag] of Object.entries(dashboard.primaryTags)) {
+      // 远程已在 dashboard 聚合 primaryTags
+      for (const [matchId, tag] of Object.entries(dashboard.primaryTags ?? {})) {
         primaryTags.set(matchId, tag);
       }
     } else if (tab === "analysis") {
@@ -293,7 +251,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
         }
       }
       // 近况/弱点：串行队列末尾；失败不影响 KPI
-      if (compareLeft && compareRight) {
+      if (compareLeft && compareRight && vs) {
         try {
           compareRightForm = await getPlayerFormAnalysis(platform, vs, {
             gameMode: gameMode || undefined,
@@ -303,20 +261,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
           compareRightFormUnavailable = true;
         }
       }
-    } else if (tab === "squad" && mateNames.length > 0) {
-      try {
-        const squadRefresh =
-          refreshParam === "1" || refreshParam === "true";
-        squadStats = await getSquadStats({
-          platform,
-          playerName: name,
-          mateNames,
-          limit: squadLimit,
-          gameMode: squadGameMode,
-          refresh: squadRefresh,
-        });
-      } catch (e) {
-        squadError = friendlyErrorMessage(e);
     } else if (tab === "squad") {
       const [dashboard, seasonsResult] = await Promise.all([
         headerDashboard(),

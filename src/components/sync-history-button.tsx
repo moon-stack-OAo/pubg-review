@@ -70,30 +70,26 @@ export function SyncHistoryButton({
         />
         <span>顺带解析最近 3 场遥测（较慢）</span>
       </label>
-    <div className="relative">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={loading}
-        className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:border-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
-        title="将官方近况对局写入本地历史库（90s 冷却）"
-      >
-        {loading
-          ? parseRecentOn
-            ? "同步并解析中…"
-            : "同步中…"
-          : "同步近况"}
-      </button>
-      {hint ? (
-        <span className="max-w-[14rem] text-right text-xs text-zinc-500">
-          {hint}
-        </span>
-      ) : null}
-      {hint ? (
-        <span className="absolute top-full right-0 z-10 mt-1 max-w-[14rem] whitespace-nowrap text-right text-xs text-zinc-500">
-          {hint}
-        </span>
-      ) : null}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={loading}
+          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:border-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+          title="将官方近况对局写入本地历史库（90s 冷却）"
+        >
+          {loading
+            ? parseRecentOn
+              ? "同步并解析中…"
+              : "同步中…"
+            : "同步近况"}
+        </button>
+        {hint ? (
+          <span className="absolute top-full right-0 z-10 mt-1 max-w-[14rem] whitespace-nowrap text-right text-xs text-zinc-500">
+            {hint}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
