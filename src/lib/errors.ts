@@ -70,4 +70,4 @@ export function friendlyErrorMessage(error: unknown): string {
 }
 
 export const EMPTY_RECENT_MATCHES =
-  "近 14 天暂无对局记录。官方玩家资料仅保留约两周内的对局列表；收藏同步能力将在后续里程碑提供。";
+  "近 14 天暂无对局记录。官方玩家资料仅保留约两周内的对局列表；可在收藏页或玩家页手动「同步近况」写入本地历史库。";

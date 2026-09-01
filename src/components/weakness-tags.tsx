@@ -9,6 +9,8 @@ export function WeaknessTagChips({
   activeTag,
   gameMode,
   seasonId,
+  map,
+  sort,
 }: {
   tags: WeaknessTagSummary[];
   platform: string;
@@ -16,6 +18,8 @@ export function WeaknessTagChips({
   activeTag?: string;
   gameMode?: string;
   seasonId?: string;
+  map?: string;
+  sort?: string;
 }) {
   if (tags.length === 0) {
     return (
@@ -35,6 +39,8 @@ export function WeaknessTagChips({
             href={buildPlayerHref(platform, name, {
               gameMode,
               seasonId,
+              map,
+              sort,
               tag: active ? undefined : t.code,
             })}
             className={`rounded-full border px-3 py-1 text-sm transition-colors ${
@@ -51,7 +57,12 @@ export function WeaknessTagChips({
       })}
       {activeTag ? (
         <Link
-          href={buildPlayerHref(platform, name, { gameMode, seasonId })}
+          href={buildPlayerHref(platform, name, {
+            gameMode,
+            seasonId,
+            map,
+            sort,
+          })}
           className="rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-500 hover:text-zinc-300"
         >
           清除过滤

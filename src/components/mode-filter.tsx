@@ -13,8 +13,10 @@ export function ModeFilter({
   current,
   seasonId,
   tag,
+  map,
   tab,
   vs,
+  sort,
   options,
 }: {
   platform: string;
@@ -22,8 +24,10 @@ export function ModeFilter({
   current: string;
   seasonId?: string;
   tag?: string;
+  map?: string;
   tab?: string;
   vs?: string;
+  sort?: string;
   options: ModeOption[];
 }) {
   const router = useRouter();
@@ -33,8 +37,10 @@ export function ModeFilter({
     if (next) q.set("gameMode", next);
     if (seasonId) q.set("seasonId", seasonId);
     if (tag) q.set("tag", tag);
+    if (map) q.set("map", map);
     if (tab) q.set("tab", tab);
     if (vs) q.set("vs", vs);
+    if (sort && sort !== "time") q.set("sort", sort);
     router.push(
       `/player/${platform}/${encodeURIComponent(name)}${q.toString() ? `?${q}` : ""}`,
     );

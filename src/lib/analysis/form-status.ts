@@ -1,5 +1,5 @@
 import {type MatchReport, type ReportTagCode, tagLabel,} from "@/lib/analysis/report-engine";
-import type {PlayerRadar} from "@/lib/analysis/player-analysis-core";
+import type {PlayerRadar, WeaknessTagSummary,} from "@/lib/analysis/player-analysis-core";
 
 export type FormStatusCode = "normal" | "soft" | "poor";
 
@@ -62,6 +62,8 @@ export type PlayerFormAnalysis = {
   anomalies: AnomalyItem[];
   /** 0–100，供 UI「综合评分」；优先雷达五维均值，否则按 form 映射 */
   overallScore?: number;
+  /** 近场弱点聚合；由 getPlayerFormAnalysis 附带，避免再打 dashboard */
+  weaknessTags?: WeaknessTagSummary[];
 };
 
 export type RecentMatchFormRow = {

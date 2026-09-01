@@ -41,19 +41,44 @@ export async function generateMetadata({
     const map = mapLabel(match.mapName);
     let title = `${map} · ${match.gameMode} · PUBG Review`;
     let description = `${formatDateTime(match.playedAt)} · 时长 ${formatDuration(match.durationSec)}`;
+    let primaryLabel = "";
     if (accountId) {
       const focus = match.rosters
         .flatMap((r) => r.participants)
         .find((p) => p.accountId === accountId);
       if (focus) {
         title = `${focus.name} · ${map} #${focus.winPlace ?? "-"} · PUBG Review`;
-        description = `击杀 ${focus.kills} · 伤害 ${formatNumber(focus.damageDealt, 0)} · ${match.gameMode}`;
+        description = `#${focus.winPlace ?? "-"} · 击杀 ${focus.kills} · ${map}`;
+        try {
+          const { report } = await buildMatchReport(
+            platform,
+            matchId,
+            accountId,
+          );
+          primaryLabel = report.primaryTag.label;
+          description = `#${focus.winPlace ?? "-"} · 击杀 ${focus.kills} · ${primaryLabel} · ${map}`;
+        } catch {
+          /* keep base description */
+        }
       }
     }
+    const ogQs = new URLSearchParams({ platform });
+    if (accountId) ogQs.set("accountId", accountId);
+    const ogImage = `/share/match/${matchId}/og?${ogQs.toString()}`;
     return {
       title,
       description,
-      openGraph: { title, description },
+      openGraph: {
+        title,
+        description,
+        images: [{ url: ogImage, width: 1200, height: 630 }],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description,
+        images: [ogImage],
+      },
     };
   } catch {
     return {
@@ -115,6 +140,7 @@ export default async function ShareMatchPage({
   if (focus?.name) detailQs.set("name", focus.name);
 
   const summaryLines = (report?.summaryLines ?? []).slice(0, 3);
+  const suggestionLines = (report?.suggestions ?? []).slice(0, 3);
 
   return (
     <PageShell>
@@ -181,8 +207,18 @@ export default async function ShareMatchPage({
             <div className="space-y-4 px-5 py-4">
               {report ? (
                 <>
+                  <p className="text-xs text-zinc-500">
+                    {!report.degraded ? "遥测增强" : "降级初判"} · ruleVersion{" "}
+                    {report.ruleVersion}
+                  </p>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-3 py-1 text-sm font-medium text-rose-200">
+                    <span
+                      className={
+                        report.primaryTag.code === "good_game"
+                          ? "rounded-full border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-sm font-medium text-amber-200"
+                          : "rounded-full border border-rose-500/40 bg-rose-500/15 px-3 py-1 text-sm font-medium text-rose-200"
+                      }
+                    >
                       {report.primaryTag.label}
                     </span>
                     {report.tags.slice(0, 3).map((t) => (
@@ -193,6 +229,10 @@ export default async function ShareMatchPage({
                         {t.label}
                       </span>
                     ))}
+                    <span className="rounded-md border border-zinc-700 px-2 py-0.5 text-xs text-zinc-500">
+                      总置信度{" "}
+                      {CONFIDENCE_LABEL[report.confidence] ?? report.confidence}
+                    </span>
                   </div>
                   {summaryLines.length > 0 && (
                     <ul className="space-y-1.5 text-sm text-zinc-300">
@@ -203,6 +243,21 @@ export default async function ShareMatchPage({
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {suggestionLines.length > 0 && (
+                    <div>
+                      <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        建议
+                      </h3>
+                      <ul className="space-y-1.5 text-sm text-zinc-300">
+                        {suggestionLines.map((line, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="text-amber-600">→</span>
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </>
               ) : accountId && reportError ? (
@@ -239,6 +294,12 @@ export default async function ShareMatchPage({
     </PageShell>
   );
 }
+
+const CONFIDENCE_LABEL: Record<string, string> = {
+  high: "高",
+  medium: "中",
+  low: "低",
+};
 
 function ShareStat({ label, value }: { label: string; value: string }) {
   return (

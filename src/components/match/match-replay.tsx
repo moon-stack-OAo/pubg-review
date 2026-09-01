@@ -15,6 +15,7 @@ type Props = {
   matchId: string;
   platform: string;
   accountId?: string;
+  initialT?: number;
 };
 
 type Layers = {
@@ -26,6 +27,10 @@ type Layers = {
 
 /** 枪线淡出窗口（秒）：仅绘制 [t-FADE, t] 内线段 */
 const GUNLINE_FADE_SEC = 2.5;
+/** 事件高亮时间窗（秒）：|e.t - curT| <= 此值 */
+const EVENT_HL_SEC = 1.0;
+/** 跟随视角固定缩放 */
+const FOLLOW_ZOOM = 2;
 
 const SPEEDS = [1, 2, 4] as const;
 
@@ -108,7 +113,7 @@ function drawGunlines(
   }
 }
 
-export function MatchReplay({ matchId, platform, accountId }: Props) {
+export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   const [data, setData] = useState<TelemetryEventsPayload | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -122,6 +127,7 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
     zones: true,
     gunlines: true,
   });
+  const [follow, setFollow] = useState(() => Boolean(accountId));
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tRef = useRef(0);
@@ -134,6 +140,7 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
   const loadRef = useRef<(opts?: { forceParse?: boolean }) => Promise<void>>(
     async () => undefined,
   );
+  const appliedInitialKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     tRef.current = t;
@@ -219,6 +226,17 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
     durationRef.current = duration;
   }, [duration]);
 
+  useEffect(() => {
+    if (!data || data.status !== "ready") return;
+    if (initialT == null) return;
+    const key = `${matchId}:${initialT}`;
+    if (appliedInitialKeyRef.current === key) return;
+    appliedInitialKeyRef.current = key;
+    const clamped = Math.min(Math.max(initialT, 0), data.durationSec);
+    setPlaying(false);
+    setT(clamped);
+  }, [data, initialT, matchId]);
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const payload = data;
@@ -233,11 +251,25 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
     const ox = (w - size) / 2;
     const oy = (h - size) / 2;
     const curT = tRef.current;
+    const at = positionsAt(curT, byPlayer);
+
+    let zoom = 1;
+    let centerX = mapSize / 2;
+    let centerY = mapSize / 2;
+    if (follow && accountId) {
+      const focusPos = at.get(accountId);
+      if (focusPos) {
+        zoom = FOLLOW_ZOOM;
+        centerX = focusPos.x;
+        centerY = focusPos.y;
+      }
+    }
 
     const toCanvas = (x: number, y: number) => ({
-      cx: ox + (x / mapSize) * size,
-      cy: oy + (y / mapSize) * size,
+      cx: ox + size / 2 + ((x - centerX) / mapSize) * size * zoom,
+      cy: oy + size / 2 + ((y - centerY) / mapSize) * size * zoom,
     });
+    const toRadius = (r: number) => (r / mapSize) * size * zoom;
 
     ctx.fillStyle = "#0c0c0e";
     ctx.fillRect(0, 0, w, h);
@@ -250,7 +282,7 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
       const safe = zoneAt(payload.zones, curT, "safe");
       if (blue) {
         const { cx, cy } = toCanvas(blue.x, blue.y);
-        const r = (blue.radius / mapSize) * size;
+        const r = toRadius(blue.radius);
         ctx.beginPath();
         ctx.arc(cx, cy, Math.max(r, 1), 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(59,130,246,0.55)";
@@ -259,7 +291,7 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
       }
       if (safe) {
         const { cx, cy } = toCanvas(safe.x, safe.y);
-        const r = (safe.radius / mapSize) * size;
+        const r = toRadius(safe.radius);
         ctx.beginPath();
         ctx.arc(cx, cy, Math.max(r, 1), 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255,255,255,0.35)";
@@ -293,7 +325,27 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
       drawGunlines(ctx, payload.gunlines, curT, toCanvas, accountId);
     }
 
-    const at = positionsAt(curT, byPlayer);
+    for (const e of payload.events) {
+      if (e.type !== "kill" && e.type !== "knock") continue;
+      if (e.x == null || e.y == null) continue;
+      if (Math.abs(e.t - curT) > EVENT_HL_SEC) continue;
+      const { cx, cy } = toCanvas(e.x, e.y);
+      const age = Math.abs(e.t - curT);
+      const alpha = Math.max(0.35, 1 - age / EVENT_HL_SEC);
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      if (e.type === "kill") {
+        ctx.strokeStyle = `rgba(251,113,133,${alpha})`;
+        ctx.fillStyle = `rgba(251,113,133,${alpha * 0.18})`;
+      } else {
+        ctx.strokeStyle = `rgba(251,191,36,${alpha})`;
+        ctx.fillStyle = `rgba(251,191,36,${alpha * 0.18})`;
+      }
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+    }
+
     const nameById = new Map(payload.players.map((p) => [p.accountId, p]));
 
     for (const [id, pos] of at) {
@@ -324,11 +376,11 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
         }
       }
     }
-  }, [data, mapSize, layers, accountId, byPlayer]);
+  }, [data, mapSize, layers, accountId, byPlayer, follow]);
 
   useEffect(() => {
     draw();
-  }, [draw, t, layers]);
+  }, [draw, t, layers, follow]);
 
   useEffect(() => {
     if (!playing) {
@@ -458,6 +510,16 @@ export function MatchReplay({ matchId, platform, accountId }: Props) {
         />
 
         <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
+          {accountId ? (
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={follow}
+                onChange={(e) => setFollow(e.target.checked)}
+              />
+              跟随
+            </label>
+          ) : null}
           {(
             [
               ["trail", "轨迹"],

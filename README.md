@@ -205,7 +205,7 @@ curl "http://127.0.0.1:3000/api/v1/squad/stats?platform=steam&name=Nick&mates=A,
 - **分析 Tab**：`?tab=analysis`，雷达粗分 + 问题与建议。
 - **近况 form**：`GET /api/v1/players/form` — 赛季 KPI vs 近 N 场 → `normal|soft|poor`；连续负向主因 / 低伤离群异常（客观表述，无侮辱措辞）。玩家概览顶部「近况现状」卡同进程调用 `getPlayerFormAnalysis`（失败降级，不拖垮整页）。
 - **收藏**：浏览器 `localStorage`，键 `pubg-review:favorites`。
-- **遥测增强报告**：MVP 仅展示状态文案；规则重算后续开放。
+- **遥测增强报告**：telemetry ready → `1.1.0-telemetry`；否则 `1.0.0-no-telemetry`；分析 Tab 聚合上述报告；样本过少降级展示。
 
 ## 网关限流与同步日志
 
@@ -224,11 +224,17 @@ curl "http://127.0.0.1:3000/api/v1/squad/stats?platform=steam&name=Nick&mates=A,
 > 勿伪造「已提额」。默认仍按 ~10 RPM 设计。  
 > 完整中英材料：[`docs/05-API提额申请材料.md`](docs/05-API提额申请材料.md)
 
+**提交勾选说明**
+
+- **Demo 可公网访问**：须先把材料里的 `YOUR-DEMO-HOST` 等占位换成真实可访问 URL（及访问门槛说明），再勾本项；勿填假公网地址。
+- **正式提交「I NEED A HIGHER LIMIT」**：只能由人登录 [developer.pubg.com](https://developer.pubg.com) 操作；本仓库无法代勾、不代表已申请/已获批。
+- **仍保留网关限流…**：属**运维承诺**（上线后继续开 `RATE_LIMIT_RPM` + 本地缓存；Redis 仍属后续，当前为进程内限流）。勾选表示同意按此运行，不是「已上 Redis / 已提额」。
+
 - [x] 网关限流已落地（`RATE_LIMIT_RPM` + proxy）
 - [x] 提额材料已写（产品 / 缓存 / 请求模式 / 合规 / Demo 占位）
 - [ ] Demo 可公网访问（替换材料中的 URL 占位）
 - [ ] 在 developer.pubg.com 正式提交「I NEED A HIGHER LIMIT」（材料已备，上线后提交）
-- [ ] 上线后仍保留网关限流与本地/Redis 缓存，不依赖提额兜底
+- [ ] 上线后仍保留网关限流与本地缓存（进程内；Redis 后续），不依赖提额兜底
 
 ## 里程碑
 

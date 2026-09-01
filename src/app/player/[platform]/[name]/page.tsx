@@ -4,7 +4,14 @@ import {FavoriteButton} from "@/components/favorite-button";
 import {FormStatusCard} from "@/components/form-status-card";
 import {ReportTagChip} from "@/components/match-report-card";
 import {ModeFilter} from "@/components/mode-filter";
-import {CompareTabPanel, MapsTabPanel, parsePlayerTab, PlayerTabNav, WeaponsTabPanel,} from "@/components/player-tabs";
+import {
+  buildPlayerHref,
+  CompareTabPanel,
+  MapsTabPanel,
+  parsePlayerTab,
+  PlayerTabNav,
+  WeaponsTabPanel,
+} from "@/components/player-tabs";
 import {SquadTabPanel} from "@/components/squad-tab";
 import {RefreshButton} from "@/components/refresh-button";
 import {SeasonSelect} from "@/components/season-select";
@@ -13,6 +20,7 @@ import {TrendChart} from "@/components/trend-chart";
 import {Card, ErrorBox, Kpi, PageShell} from "@/components/ui";
 import {RadarBars, WeaknessTagChips} from "@/components/weakness-tags";
 import {getPlayerAnalysisByName, type PlayerAnalysis,} from "@/lib/analysis/player-analysis";
+import {WEAK_SAMPLE_THRESHOLD} from "@/lib/analysis/player-analysis-core";
 import {getPlayerFormAnalysis, type PlayerFormAnalysis,} from "@/lib/analysis/player-form";
 import type {ReportTagCode} from "@/lib/analysis/report-engine";
 import {EMPTY_RECENT_MATCHES, friendlyErrorMessage} from "@/lib/errors";
@@ -25,17 +33,35 @@ import {getCachedSeasons, getPlayerDashboard} from "@/lib/pubg/service";
 import {getSquadStats} from "@/lib/squad/stats";
 import type {SquadStatsResult} from "@/lib/squad/types";
 
+type MatchSortKey = "time" | "rank" | "kills" | "damage";
+
+const MATCH_PAGE_SIZE = 10;
+
+function parseMatchSort(raw: string | undefined): MatchSortKey {
+  if (raw === "rank" || raw === "kills" || raw === "damage") return raw;
+  return "time";
+}
+
+function parseMatchPage(raw: string | undefined): number {
+  const n = Number(raw ?? "1");
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.floor(n));
+}
+
 type PageProps = {
   params: Promise<{ platform: string; name: string }>;
   searchParams: Promise<{
     gameMode?: string;
     seasonId?: string;
     tag?: string;
+    map?: string;
     tab?: string;
     vs?: string;
     mates?: string;
     limit?: string;
     refresh?: string;
+    sort?: string;
+    page?: string;
   }>;
 };
 
@@ -81,19 +107,28 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
     gameMode = "",
     seasonId: seasonIdParam = "",
     tag: tagParam = "",
+    map: mapParam = "",
     tab: tabParam = "",
     vs: vsParam = "",
     mates: matesParam = "",
     limit: limitParam = "",
     refresh: refreshParam = "",
+    sort: sortParam = "",
+    page: pageParam = "",
   } = await searchParams;
   const name = safeDecodeURIComponent(nameParam);
   const seasonId = seasonIdParam.trim() || undefined;
   const activeTag = tagParam.trim() || undefined;
+  const activeMap = mapParam.trim() || undefined;
   const tab = parsePlayerTab(tabParam);
   const vs = vsParam.trim() || undefined;
   const mateNames = parseMateNames(matesParam);
   const squadLimit = parseSquadLimit(limitParam);
+  const matchSort = parseMatchSort(sortParam.trim() || undefined);
+  const matchPageRaw = parseMatchPage(pageParam.trim() || undefined);
+  // 车队 Tab：未指定 gameMode 时默认 squad；其它 Tab 保持原语义（空=默认场次最多）
+  const squadGameMode =
+    tab === "squad" ? gameMode.trim() || "squad" : gameMode;
   // 车队 Tab：未指定 gameMode 时不过滤（避免默认 squad 漏掉 squad-fpp）；其它 Tab 保持原语义
   const squadGameMode = tab === "squad" ? gameMode.trim() : gameMode;
 
@@ -115,12 +150,54 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
   let compareLeft: ComparePlayerSide | null = null;
   let compareRight: ComparePlayerSide | null = null;
   let compareError = "";
+  let compareRightForm: PlayerFormAnalysis | null = null;
+  let compareRightFormUnavailable = false;
   let squadStats: SquadStatsResult | null = null;
   let squadError = "";
   let error = "";
   const primaryTags = new Map<string, PrimaryTagInfo | null>();
 
   try {
+    const [dashboard, seasonsResult, formResult] = await Promise.all([
+      getPlayerDashboard(platform, name, {
+        gameMode: gameMode || undefined,
+        seasonId,
+        recentLimit: 20,
+      }),
+      getCachedSeasons(platform),
+      getPlayerFormAnalysis(platform, name, {
+        gameMode: gameMode || undefined,
+        seasonId,
+      }).then(
+        (value) => ({ ok: true as const, value }),
+        (e: unknown) => ({
+          ok: false as const,
+          error: friendlyErrorMessage(e),
+        }),
+      ),
+    ]);
+    data = dashboard;
+    seasons = seasonsResult.value;
+    if (formResult.ok) {
+      formAnalysis = formResult.value;
+    } else {
+      formError = formResult.error;
+    }
+
+    for (const m of data.recentMatches) {
+      try {
+        const { report } = await buildMatchReport(
+          platform,
+          m.matchId,
+          data.player.accountId,
+        );
+        primaryTags.set(m.matchId, {
+          code: report.primaryTag.code,
+          label: report.primaryTag.label,
+          positive: report.primaryTag.code === "good_game",
+        });
+      } catch {
+        primaryTags.set(m.matchId, null);
     const seasonsPromise = getCachedSeasons(platform);
     // 页头仍要 player/season；非 overview 用 recentLimit:0 跳过近场报告
     const headerDashboard = () =>
@@ -215,6 +292,31 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
           compareError = friendlyErrorMessage(e);
         }
       }
+      // 近况/弱点：串行队列末尾；失败不影响 KPI
+      if (compareLeft && compareRight) {
+        try {
+          compareRightForm = await getPlayerFormAnalysis(platform, vs, {
+            gameMode: gameMode || undefined,
+            seasonId,
+          });
+        } catch {
+          compareRightFormUnavailable = true;
+        }
+      }
+    } else if (tab === "squad" && mateNames.length > 0) {
+      try {
+        const squadRefresh =
+          refreshParam === "1" || refreshParam === "true";
+        squadStats = await getSquadStats({
+          platform,
+          playerName: name,
+          mateNames,
+          limit: squadLimit,
+          gameMode: squadGameMode,
+          refresh: squadRefresh,
+        });
+      } catch (e) {
+        squadError = friendlyErrorMessage(e);
     } else if (tab === "squad") {
       const [dashboard, seasonsResult] = await Promise.all([
         headerDashboard(),
@@ -250,12 +352,77 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
     seasons[0]?.id ||
     "";
 
-  const filteredMatches =
-    data?.recentMatches.filter((m) => {
-      if (!activeTag) return true;
-      const tag = primaryTags.get(m.matchId);
-      return tag?.code === activeTag;
-    }) ?? [];
+  const mergedMatches = data
+    ? [...data.recentMatches, ...data.localHistoryExtra]
+    : [];
+
+  const filteredMatches = mergedMatches.filter((m) => {
+    if (activeMap && m.mapName !== activeMap) return false;
+    if (gameMode && m.gameMode !== gameMode) return false;
+    if (!activeTag) return true;
+    const tag = primaryTags.get(m.matchId);
+    return tag?.code === activeTag;
+  });
+
+  const sortedMatches = [...filteredMatches].sort((a, b) => {
+    if (matchSort === "rank") {
+      if (a.rank == null && b.rank == null) {
+        return +new Date(b.playedAt) - +new Date(a.playedAt);
+      }
+      if (a.rank == null) return 1;
+      if (b.rank == null) return -1;
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      return +new Date(b.playedAt) - +new Date(a.playedAt);
+    }
+    if (matchSort === "kills") {
+      if (b.kills !== a.kills) return b.kills - a.kills;
+      return +new Date(b.playedAt) - +new Date(a.playedAt);
+    }
+    if (matchSort === "damage") {
+      if (b.damage !== a.damage) return b.damage - a.damage;
+      return +new Date(b.playedAt) - +new Date(a.playedAt);
+    }
+    return +new Date(b.playedAt) - +new Date(a.playedAt);
+  });
+
+  const matchTotalPages = Math.max(
+    1,
+    Math.ceil(sortedMatches.length / MATCH_PAGE_SIZE),
+  );
+  const matchPage = Math.min(matchPageRaw, matchTotalPages);
+  const pagedMatches = sortedMatches.slice(
+    (matchPage - 1) * MATCH_PAGE_SIZE,
+    matchPage * MATCH_PAGE_SIZE,
+  );
+
+  function matchListHref(opts: {
+    tag?: string;
+    map?: string;
+    sort?: MatchSortKey;
+    page?: number;
+    clearTag?: boolean;
+    clearMap?: boolean;
+  }) {
+    const nextTag = opts.clearTag
+      ? undefined
+      : opts.tag !== undefined
+        ? opts.tag || undefined
+        : activeTag;
+    const nextMap = opts.clearMap
+      ? undefined
+      : opts.map !== undefined
+        ? opts.map || undefined
+        : activeMap;
+    const nextSort = opts.sort ?? matchSort;
+    return buildPlayerHref(platform, name, {
+      gameMode: gameMode || undefined,
+      seasonId,
+      tag: nextTag,
+      map: nextMap,
+      sort: nextSort === "time" ? undefined : nextSort,
+      page: opts.page && opts.page > 1 ? opts.page : undefined,
+    });
+  }
 
   const modeOptions =
     data?.season.modeStats.map((m) => ({
@@ -345,15 +512,17 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
           {(tab === "weapons" || tab === "maps" || tab === "compare") &&
           modeOptions.length > 0 ? (
             <Card>
-              <ModeFilter
-                platform={platform}
-                name={name}
-                current={gameMode}
-                seasonId={seasonId}
-                tab={tab}
-                vs={vs}
-                options={modeOptions}
-              />
+                <ModeFilter
+                  platform={platform}
+                  name={name}
+                  current={gameMode}
+                  seasonId={seasonId}
+                  map={activeMap}
+                  tab={tab}
+                  vs={vs}
+                  sort={matchSort === "time" ? undefined : matchSort}
+                  options={modeOptions}
+                />
             </Card>
           ) : null}
 
@@ -369,7 +538,11 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
             <Card>
               <h2 className="mb-3 font-medium">武器 / 战斗聚合</h2>
               {weapons ? (
-                <WeaponsTabPanel data={weapons} />
+                <WeaponsTabPanel
+                  data={weapons}
+                  platform={platform}
+                  name={name}
+                />
               ) : (
                 <p className="text-sm text-zinc-500">暂无数据</p>
               )}
@@ -382,6 +555,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   rows={maps.rows}
                   sampleSize={maps.sampleSize}
                   gameModeFilter={maps.gameModeFilter}
+                  platform={platform}
+                  name={name}
+                  gameMode={gameMode || undefined}
                 />
               ) : (
                 <p className="text-sm text-zinc-500">暂无数据</p>
@@ -399,6 +575,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 left={compareLeft}
                 right={compareRight}
                 error={compareError || undefined}
+                leftForm={formAnalysis?.form ?? null}
+                rightForm={compareRightForm?.form ?? null}
+                leftWeakness={data.weaknessTags}
+                rightWeakness={compareRightForm?.weaknessTags ?? []}
+                leftFormUnavailable={!formAnalysis}
+                rightFormUnavailable={compareRightFormUnavailable}
               />
             </Card>
           ) : tab === "squad" ? (
@@ -437,6 +619,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                         currentSeasonId={activeSeasonId}
                         gameMode={gameMode || undefined}
                         tag={activeTag}
+                        map={activeMap}
+                        sort={matchSort === "time" ? undefined : matchSort}
                         options={seasons}
                       />
                     ) : (
@@ -458,6 +642,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   current={gameMode}
                   seasonId={seasonId}
                   tag={activeTag}
+                  map={activeMap}
+                  sort={matchSort === "time" ? undefined : matchSort}
                   options={modeOptions}
                 />
 
@@ -496,6 +682,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                     activeTag={activeTag}
                     gameMode={gameMode || undefined}
                     seasonId={seasonId}
+                    map={activeMap}
+                    sort={matchSort === "time" ? undefined : matchSort}
                   />
                 </div>
 
@@ -505,92 +693,149 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
               </Card>
 
               <Card>
-                <div className="mb-3 flex items-center justify-between">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-medium">
-                    近期对局
+                    对局列表
                     {activeTag ? (
                       <span className="ml-2 text-sm font-normal text-rose-300">
                         · 已按标签过滤
                       </span>
                     ) : null}
+                    {activeMap ? (
+                      <span className="ml-2 text-sm font-normal text-emerald-300">
+                        · 已按地图过滤
+                      </span>
+                    ) : null}
+                    {gameMode ? (
+                      <span className="ml-2 text-sm font-normal text-sky-300">
+                        · 模式 {gameMode}
+                      </span>
+                    ) : null}
                   </h2>
                   <span className="text-xs text-zinc-500">
-                    展示 {filteredMatches.length}
-                    {activeTag
-                      ? ` / ${data.recentMatches.length}`
-                      : ""}{" "}
-                    场
+                    {sortedMatches.length} 场
+                    {sortedMatches.length > MATCH_PAGE_SIZE
+                      ? ` · 第 ${matchPage}/${matchTotalPages} 页`
+                      : ""}
                     {data.player.recentMatchCount > 0
                       ? `（官方列表共 ${data.player.recentMatchCount} 场）`
                       : ""}
                   </span>
                 </div>
 
-                {data.recentMatches.length === 0 ? (
-                  <p className="text-sm text-zinc-500">{EMPTY_RECENT_MATCHES}</p>
-                ) : filteredMatches.length === 0 ? (
-                  <p className="text-sm text-zinc-500">
-                    当前标签下无匹配对局，
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-zinc-500">排序</span>
+                  {(
+                    [
+                      { key: "time", label: "时间" },
+                      { key: "rank", label: "排名" },
+                      { key: "kills", label: "击杀" },
+                      { key: "damage", label: "伤害" },
+                    ] as const
+                  ).map((item) => {
+                    const active = matchSort === item.key;
+                    return (
+                      <Link
+                        key={item.key}
+                        href={matchListHref({
+                          sort: item.key,
+                          page: 1,
+                        })}
+                        className={`rounded-full px-2.5 py-0.5 ${
+                          active
+                            ? "bg-amber-500 text-black"
+                            : "border border-zinc-700 text-zinc-300 hover:border-amber-500/50"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                  {(activeTag || activeMap) && (
                     <Link
-                      href={`/player/${platform}/${encodeURIComponent(name)}${
-                        gameMode || seasonId
-                          ? `?${new URLSearchParams({
-                              ...(gameMode ? { gameMode } : {}),
-                              ...(seasonId ? { seasonId } : {}),
-                            })}`
-                          : ""
-                      }`}
+                      href={matchListHref({
+                        clearTag: true,
+                        clearMap: true,
+                        page: 1,
+                      })}
+                      className="ml-1 text-xs text-amber-300 hover:underline"
+                    >
+                      清除过滤
+                    </Link>
+                  )}
+                </div>
+
+                {activeTag ? (
+                  <p className="mb-3 text-xs text-zinc-600">
+                    标签过滤仅覆盖已生成报告的对局；本地历史库无报告场会被排除。
+                  </p>
+                ) : null}
+
+                {mergedMatches.length === 0 ? (
+                  <p className="text-sm text-zinc-500">{EMPTY_RECENT_MATCHES}</p>
+                ) : sortedMatches.length === 0 ? (
+                  <p className="text-sm text-zinc-500">
+                    当前过滤条件下无匹配对局，
+                    <Link
+                      href={matchListHref({
+                        clearTag: true,
+                        clearMap: true,
+                        page: 1,
+                      })}
                       className="text-amber-300 hover:underline"
                     >
                       清除过滤
                     </Link>
                   </p>
                 ) : (
-                  <MatchTable
-                    rows={filteredMatches}
-                    primaryTags={primaryTags}
-                    platform={platform}
-                    accountId={data.player.accountId}
-                    name={name}
-                  />
+                  <>
+                    <MatchTable
+                      rows={pagedMatches}
+                      primaryTags={primaryTags}
+                      platform={platform}
+                      accountId={data.player.accountId}
+                      name={name}
+                      showSource
+                    />
+                    {matchTotalPages > 1 ? (
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="text-zinc-500">
+                          每页 {MATCH_PAGE_SIZE} 场
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {matchPage > 1 ? (
+                            <Link
+                              href={matchListHref({ page: matchPage - 1 })}
+                              className="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-300 hover:border-amber-500/50"
+                            >
+                              上一页
+                            </Link>
+                          ) : (
+                            <span className="rounded-lg border border-zinc-800 px-3 py-1 text-zinc-600">
+                              上一页
+                            </span>
+                          )}
+                          <span className="tabular-nums text-zinc-400">
+                            {matchPage} / {matchTotalPages}
+                          </span>
+                          {matchPage < matchTotalPages ? (
+                            <Link
+                              href={matchListHref({ page: matchPage + 1 })}
+                              className="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-300 hover:border-amber-500/50"
+                            >
+                              下一页
+                            </Link>
+                          ) : (
+                            <span className="rounded-lg border border-zinc-800 px-3 py-1 text-zinc-600">
+                              下一页
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </Card>
-
-              {data.localHistoryExtra.length > 0 ? (
-                <Card>
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="font-medium">
-                      历史库
-                      <span className="ml-2 text-sm font-normal text-zinc-500">
-                        本地已存、不在本次官方近况列表中的对局（去重）
-                      </span>
-                    </h2>
-                    <span className="text-xs text-zinc-500">
-                      {data.localHistoryExtra.length} 场 · 共{" "}
-                      {data.historyTotal} 场已存
-                    </span>
-                  </div>
-                  <p className="mb-3 text-xs text-zinc-600">
-                    官方 API 仅返回约 14 天对局列表。访问概览或「同步近况」会写入
-                    `.data/history/`，便于突破列表窗口查看已缓存摘要。
-                  </p>
-                  <MatchTable
-                    rows={data.localHistoryExtra}
-                    primaryTags={primaryTags}
-                    platform={platform}
-                    accountId={data.player.accountId}
-                    name={name}
-                    showSource
-                  />
-                </Card>
-              ) : data.historyTotal > 0 ? (
-                <Card>
-                  <p className="text-sm text-zinc-500">
-                    本地历史库已存 {data.historyTotal}{" "}
-                    场，均已出现在上方官方近况列表中。收藏后可定期点「同步近况」积累更久数据。
-                  </p>
-                </Card>
-              ) : null}
             </>
           )}
         </>
@@ -610,6 +855,7 @@ function MatchTable({
   rows: {
     matchId: string;
     playedAt: string;
+    mapName?: string;
     mapLabel: string;
     gameMode: string;
     rank: number | null;
@@ -679,7 +925,9 @@ function MatchTable({
                   )}
                 </td>
                 {showSource ? (
-                  <td className="px-2 py-2 text-xs text-zinc-500">本地</td>
+                  <td className="px-2 py-2 text-xs text-zinc-500">
+                    {m.source === "local" ? "本地" : "官方"}
+                  </td>
                 ) : null}
               </tr>
             );
@@ -711,22 +959,45 @@ function AnalysisSection({
     );
   }
 
+  const { sampleSize } = analysis;
+  const weakSample = sampleSize > 0 && sampleSize < WEAK_SAMPLE_THRESHOLD;
+
+  if (sampleSize === 0) {
+    return (
+      <Card>
+        <p className="text-sm text-zinc-500">
+          暂无可用复盘报告样本，请先同步近况或打开对局生成报告后再查看分析。
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <>
       <Card>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-medium">综合能力（粗算）</h2>
           <p className="text-xs text-zinc-500">
-            基于近 {analysis.sampleSize} 场无遥测报告 · range={analysis.range} ·
+            基于近 {sampleSize}{" "}
+            场复盘报告聚合（降级初判或遥测增强）· range={analysis.range} ·
             仅供参考
           </p>
         </div>
-        <RadarBars radar={analysis.radar} />
+        {weakSample ? (
+          <p className="text-sm text-amber-200/90">
+            样本不足（{sampleSize} 场），诊断置信度低
+          </p>
+        ) : (
+          <RadarBars radar={analysis.radar} />
+        )}
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <h2 className="mb-3 font-medium">主要问题</h2>
+          {weakSample ? (
+            <p className="mb-2 text-xs text-zinc-500">样本偏少，以下仅供参考</p>
+          ) : null}
           {analysis.topIssues.length === 0 ? (
             <p className="text-sm text-zinc-500">近期无明显负向主因。</p>
           ) : (
@@ -762,6 +1033,9 @@ function AnalysisSection({
 
         <Card>
           <h2 className="mb-3 font-medium">改进建议</h2>
+          {weakSample ? (
+            <p className="mb-2 text-xs text-zinc-500">样本偏少，以下仅供参考</p>
+          ) : null}
           {analysis.suggestions.length === 0 ? (
             <p className="text-sm text-zinc-500">暂无聚合建议。</p>
           ) : (

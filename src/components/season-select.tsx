@@ -14,8 +14,10 @@ export function SeasonSelect({
   currentSeasonId,
   gameMode,
   tag,
+  map,
   tab,
   vs,
+  sort,
   options,
 }: {
   platform: string;
@@ -23,8 +25,10 @@ export function SeasonSelect({
   currentSeasonId: string;
   gameMode?: string;
   tag?: string;
+  map?: string;
   tab?: string;
   vs?: string;
+  sort?: string;
   options: SeasonOption[];
 }) {
   const router = useRouter();
@@ -33,9 +37,11 @@ export function SeasonSelect({
     const q = new URLSearchParams();
     if (gameMode) q.set("gameMode", gameMode);
     if (tag) q.set("tag", tag);
+    if (map) q.set("map", map);
     if (tab) q.set("tab", tab);
     if (vs) q.set("vs", vs);
-    // 当前赛季不写 query，保持 URL 简洁
+    if (sort && sort !== "time") q.set("sort", sort);
+    // 当前赛季不写 query，保持 URL 简洁；切换赛季清 page
     const current = options.find((s) => s.isCurrent);
     if (nextSeasonId && (!current || nextSeasonId !== current.id)) {
       q.set("seasonId", nextSeasonId);

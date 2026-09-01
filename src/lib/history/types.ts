@@ -75,6 +75,7 @@ export type WeaponsTabData = {
   combat: ParticipantCombatAgg;
   weapons: WeaponAggRow[];
   sampleSize: number;
+  parsedCount: number;
 };
 
 export type MapsTabData = {

@@ -4,6 +4,7 @@ import {ExportScoreboardCsv} from "@/components/export-scoreboard-csv";
 import {MatchReplay} from "@/components/match/match-replay";
 import {MatchTabNav, parseMatchTab,} from "@/components/match/match-tab-nav";
 import {MatchTimeline} from "@/components/match/match-timeline";
+import {MatchWeaponsPanel} from "@/components/match/match-weapons";
 import {MatchReportCard} from "@/components/match-report-card";
 import {MatchScoreboard} from "@/components/match-scoreboard";
 import {Card, ErrorBox, PageShell} from "@/components/ui";
@@ -22,8 +23,16 @@ type PageProps = {
     accountId?: string;
     name?: string;
     tab?: string;
+    t?: string;
   }>;
 };
+
+function parseInitialT(raw: string | undefined): number | undefined {
+  if (raw == null || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return n;
+}
 
 export default async function MatchPage({ params, searchParams }: PageProps) {
   const { matchId } = await params;
@@ -32,8 +41,10 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
     accountId = "",
     name: playerName = "",
     tab: tabRaw = "",
+    t: tRaw,
   } = await searchParams;
   const tab = parseMatchTab(tabRaw);
+  const initialT = parseInitialT(tRaw);
 
   if (!isPubgPlatform(platform)) {
     return (
@@ -233,6 +244,17 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
               matchId={matchId}
               platform={platform}
               accountId={accountId || undefined}
+              initialT={initialT}
+            />
+          )}
+
+          {tab === "weapons" && (
+            <MatchWeaponsPanel
+              matchId={matchId}
+              platform={platform}
+              accountId={accountId || undefined}
+              playerName={playerName || undefined}
+              telemetryStatus={telemetryStatus}
             />
           )}
         </>

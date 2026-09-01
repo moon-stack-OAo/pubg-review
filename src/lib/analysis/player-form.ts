@@ -1,4 +1,4 @@
-import {computeRadar} from "@/lib/analysis/player-analysis-core";
+import {aggregateWeaknessTags, computeRadar,} from "@/lib/analysis/player-analysis-core";
 import {
     buildPlayerFormAnalysis,
     type FormSeasonKpi,
@@ -147,5 +147,9 @@ export async function getPlayerFormAnalysis(
   );
 
   const radar = reports.length > 0 ? computeRadar(reports) : null;
-  return buildPlayerFormAnalysis({ season, rows, radar });
+  const base = buildPlayerFormAnalysis({ season, rows, radar });
+  return {
+    ...base,
+    weaknessTags: aggregateWeaknessTags(reports, 5),
+  };
 }

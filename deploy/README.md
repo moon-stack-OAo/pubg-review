@@ -114,10 +114,70 @@ pm2 reload pubg-review --update-env
 
 ## 6. 备份 `.data/`
 
+持久态（对局、报告、历史、telemetry、日志等）落在项目根 `.data/`。进程内缓存与冷却**不**在备份范围内。
+
+### 6.1 脚本示例
+
+可复制可执行风格示例：[`backup-data.sh.example`](./backup-data.sh.example)（改 `APP_DIR` / `BACKUP_DIR` / `KEEP_DAYS` 后使用）。
+
+一行等价示例：
+
 ```bash
-# 示例：每日打包
-tar -C /opt/pubg-review -czf "/var/backups/pubg-data-$(date +%F).tgz" .data
+mkdir -p /var/backups/pubg-review
+tar -C /opt/pubg-review -czf "/var/backups/pubg-review/pubg-data-$(date +%F).tgz" .data
+# 保留最近 7 天
+find /var/backups/pubg-review -maxdepth 1 -type f -name 'pubg-data-*.tgz' -mtime +7 -delete
 ```
+
+### 6.2 cron
+
+```cron
+# 每天 03:15 备份（日志自管）
+15 3 * * * /opt/pubg-review/scripts/backup-data.sh >> /var/log/pubg-data-backup.log 2>&1
+```
+
+### 6.3 恢复思路
+
+```bash
+# 建议先停或 reload 前确认无写入冲突；解压回应用 cwd
+cd /opt/pubg-review
+# 可选：mv .data .data.bak.$(date +%F)
+tar -C /opt/pubg-review -xzf /var/backups/pubg-review/pubg-data-YYYY-MM-DD.tgz
+pm2 reload pubg-review --update-env
+```
+
+解压后应出现 `/opt/pubg-review/.data/`；内存缓存仍为空，冷读走磁盘即可。
+
+## 7. 磁盘占用与巡检
+
+```bash
+# 总览
+du -sh /opt/pubg-review/.data
+# 分目录（telemetry / history 最易膨胀）
+du -sh /opt/pubg-review/.data/* 2>/dev/null | sort -h
+```
+
+| 路径 | 说明 |
+|------|------|
+| `.data/telemetry/` | 原始 + 精简事件，单场可很大 |
+| `.data/history/`、`name-history/` | 随同步账号增长 |
+| `.data/matches/`、`reports/` | 随查询累积；match 偏长缓存 |
+| `.data/logs/api-sync.jsonl` | 上游调用日志，需定期截断或随备份策略清理 |
+
+建议：每周看一次 `du`；磁盘 >70% 时优先清理过旧 telemetry / 截断 jsonl，**不要**在未备份时直接 `rm -rf .data`。
+
+## 8. SLA / 已知限制
+
+| 项 | 现状 |
+|----|------|
+| 部署形态 | **单实例** fork（PM2 `instances: 1`）；**禁止** `cluster` / 多进程水平扩展 |
+| Redis | **无**；限流、冷却、内存缓存均在进程内 |
+| 限流 / 冷却 | BFF `RATE_LIMIT_RPM`（默认 30）+ 刷新/同步冷却；重启后窗口与冷却重置 |
+| 持久态 | 依赖 `.data/`；重启丢内存缓存，磁盘可恢复 |
+| 官方限额 | 默认约 **~10 RPM**（Key）；调高本站 `RATE_LIMIT_RPM` **不会**提高官方额度 |
+| 可用性预期 | 自托管尽力而为；无多机故障转移、无共享限流 |
+
+与提额关系：材料见 `docs/05-API提额申请材料.md`；**未公网 Demo、未在 developer.pubg.com 人工提交前，不得视为已提额**。即便日后获批，仍应保留网关限流与本地缓存。
 
 ## 安全注意
 

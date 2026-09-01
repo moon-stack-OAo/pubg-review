@@ -2,6 +2,8 @@ import {type MatchReport, type ReportTagCode, tagLabel,} from "@/lib/analysis/re
 
 export type AnalysisRange = "20m" | "14d";
 
+export const WEAK_SAMPLE_THRESHOLD = 5;
+
 export type WeaknessTagSummary = {
   code: ReportTagCode;
   label: string;

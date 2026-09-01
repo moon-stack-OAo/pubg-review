@@ -5,12 +5,18 @@ const TABS = [
   { id: "scoreboard", label: "积分板" },
   { id: "timeline", label: "事件轴" },
   { id: "replay", label: "回放" },
+  { id: "weapons", label: "武器" },
 ] as const;
 
 export type MatchTabId = (typeof TABS)[number]["id"];
 
 export function parseMatchTab(raw: string | undefined): MatchTabId {
-  if (raw === "scoreboard" || raw === "timeline" || raw === "replay") {
+  if (
+    raw === "scoreboard" ||
+    raw === "timeline" ||
+    raw === "replay" ||
+    raw === "weapons"
+  ) {
     return raw;
   }
   return "report";
@@ -36,6 +42,8 @@ export function MatchTabNav({
   if (accountId) base.set("accountId", accountId);
   if (name) base.set("name", name);
 
+  const telemetryReady = telemetryStatus === "ready";
+
   const telemetryHint =
     telemetryStatus === "ready"
       ? "遥测就绪"
@@ -57,6 +65,20 @@ export function MatchTabNav({
           if (tab.id !== "report") q.set("tab", tab.id);
           const href = `/match/${matchId}?${q.toString()}`;
           const isActive = active === tab.id;
+          const weaponsLocked = tab.id === "weapons" && !telemetryReady;
+          if (weaponsLocked) {
+            return (
+              <span
+                key={tab.id}
+                title="需遥测就绪后可用"
+                className={`cursor-not-allowed rounded-lg px-3 py-1.5 text-sm text-zinc-600 ${
+                  isActive ? "bg-zinc-900/60" : ""
+                }`}
+              >
+                {tab.label}
+              </span>
+            );
+          }
           return (
             <Link
               key={tab.id}

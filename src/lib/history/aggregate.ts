@@ -154,25 +154,44 @@ export function buildWeaponsTabData(
   telemetrySampleCount: number,
 ): WeaponsTabData {
   const combat = aggregateParticipantCombat(matches);
+  const sampleSize = matches.length;
+  const parsedCount = telemetrySampleCount;
+
   if (weapons.length > 0) {
     return {
-      source: telemetrySampleCount > 0 && telemetrySampleCount < matches.length
-        ? "mixed"
-        : "telemetry",
+      source:
+        parsedCount > 0 && parsedCount < sampleSize ? "mixed" : "telemetry",
       note:
-        telemetrySampleCount < matches.length
-          ? `已解析遥测 ${telemetrySampleCount}/${matches.length} 场；完整武器明细需更多场次 telemetry。`
-          : "武器明细来自已解析的 telemetry 击杀/倒地事件。",
+        parsedCount < sampleSize
+          ? `已解析遥测 ${parsedCount}/${sampleSize} 场；完整武器明细需更多场次 telemetry。`
+          : `已解析 ${parsedCount}/${sampleSize} 场。武器明细来自 telemetry 击杀/倒地事件。`,
       combat,
       weapons,
-      sampleSize: matches.length,
+      sampleSize,
+      parsedCount,
     };
   }
+
+  if (parsedCount === 0) {
+    return {
+      source: "participant",
+      note:
+        sampleSize === 0
+          ? "本地历史库暂无对局。请先到概览同步近况。"
+          : `近 ${sampleSize} 场均未解析遥测。打开近期对局的事件轴/回放可触发自动解析，完成后再回本 Tab。`,
+      combat,
+      weapons: [],
+      sampleSize,
+      parsedCount,
+    };
+  }
+
   return {
     source: "participant",
-    note: "当前仅有 participant 聚合（伤害/击杀/爆头）。完整武器统计需解析 telemetry。",
+    note: `已解析 ${parsedCount}/${sampleSize} 场遥测，但暂无可用武器击杀/倒地事件；当前仅展示 participant 聚合（伤害/击杀/爆头）。`,
     combat,
     weapons: [],
-    sampleSize: matches.length,
+    sampleSize,
+    parsedCount,
   };
 }

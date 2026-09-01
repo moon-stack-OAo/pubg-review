@@ -34,6 +34,26 @@ export async function POST(request: Request, context: RouteContext) {
     const { accountId: rawAccountId } = await context.params;
     const accountId = parseOrThrow(accountIdSchema, rawAccountId);
     const { searchParams } = new URL(request.url);
+    const platform = searchParams.get("platform")?.trim() ?? "";
+    const name = searchParams.get("name")?.trim() ?? "";
+    const limitRaw = searchParams.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : undefined;
+    const parseRecentRaw = searchParams.get("parseRecent");
+    const parseRecentNum = parseRecentRaw ? Number(parseRecentRaw) : 0;
+    const parseRecent =
+      Number.isFinite(parseRecentNum)
+        ? Math.min(Math.max(Math.floor(parseRecentNum), 0), 3)
+        : 0;
+
+    if (!isPubgPlatform(platform)) {
+      return fail(new BizError("platform 必须是 steam/kakao/xbox/psn"));
+    }
+    if (!accountId) {
+      return fail(new BizError("accountId 不能为空"));
+    }
+    if (!name) {
+      return fail(new BizError("name 不能为空"));
+    }
     const { platform, name, limit } = parseOrThrow(querySchema, {
       platform: searchParams.get("platform")?.trim() ?? "",
       name: searchParams.get("name")?.trim() ?? "",
@@ -41,7 +61,11 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     const result = await syncPlayerHistory(platform, accountId, name, {
-      limit,
+      limit:
+        limit != null && Number.isFinite(limit)
+          ? Math.min(Math.max(1, limit), 15)
+          : undefined,
+      parseRecent,
     });
     return ok(result, { cooldownSec: result.cooldownSec });
   } catch (error) {

@@ -17,6 +17,7 @@ import {cacheGet, cacheSet} from "@/lib/cache";
 import {BizError} from "@/lib/errors";
 import {getCachedMatch, getCachedPlayer, getCachedSeason,} from "@/lib/pubg/service";
 import type {PubgMatchDetail, PubgPlatform} from "@/lib/pubg/types";
+import {getTelemetryStatus, parseMatchTelemetry} from "@/lib/telemetry/service";
 import {readParsedEvents} from "@/lib/telemetry/storage";
 
 const SYNC_COOLDOWN_MS = 90_000;
@@ -80,17 +81,22 @@ export type SyncHistoryResult = {
   cooldownSec: number;
   renamed: boolean;
   previousName: string | null;
+  parseRecent: number;
+  telemetryParsed: number;
+  telemetrySkipped: number;
+  telemetryFailed: number;
 };
 
 /**
  * 同步近况：重拉玩家 matchIds，串行补齐本地缺失的 match 详情后 upsert。
  * 冷却 90s，避免与 refresh 叠加打满 10RPM。
+ * 可选顺带串行 parse 最近 N 场遥测（parseRecent 0..3）。
  */
 export async function syncPlayerHistory(
   platform: PubgPlatform,
   accountId: string,
   playerName: string,
-  options?: { limit?: number },
+  options?: { limit?: number; parseRecent?: number },
 ): Promise<SyncHistoryResult> {
   const name = playerName.trim();
   if (!name) throw new BizError("name 不能为空");
@@ -103,6 +109,10 @@ export async function syncPlayerHistory(
   }
 
   const limit = Math.min(options?.limit ?? 10, 15);
+  const parseRecent = Math.min(
+    Math.max(Math.floor(options?.parseRecent ?? 0), 0),
+    3,
+  );
   const { value: player } = await getCachedPlayer(platform, name);
   if (player.accountId !== accountId) {
     throw new BizError("accountId 与昵称不匹配", 400, 40001);
@@ -125,6 +135,33 @@ export async function syncPlayerHistory(
   const file = await upsertHistoryMatches(accountId, platform, records);
   const nameResult = await recordPlayerName(accountId, platform, player.name);
 
+  let telemetryParsed = 0;
+  let telemetrySkipped = 0;
+  let telemetryFailed = 0;
+
+  if (parseRecent > 0) {
+    const toParse = file.matches.slice(0, parseRecent);
+    for (const m of toParse) {
+      try {
+        const status = await getTelemetryStatus(m.matchId);
+        if (status === "ready") {
+          telemetrySkipped += 1;
+          continue;
+        }
+        const { meta } = await parseMatchTelemetry(platform, m.matchId);
+        if (meta.status === "ready") {
+          telemetryParsed += 1;
+        } else if (meta.status === "none") {
+          telemetrySkipped += 1;
+        } else {
+          telemetryFailed += 1;
+        }
+      } catch {
+        telemetryFailed += 1;
+      }
+    }
+  }
+
   cacheSet(
     syncCooldownKey(accountId),
     { lastAt: Date.now() } satisfies SyncCooldown,
@@ -141,6 +178,10 @@ export async function syncPlayerHistory(
     cooldownSec: Math.ceil(SYNC_COOLDOWN_MS / 1000),
     renamed: nameResult.renamed,
     previousName: nameResult.previousName,
+    parseRecent,
+    telemetryParsed,
+    telemetrySkipped,
+    telemetryFailed,
   };
 }
 

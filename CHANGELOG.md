@@ -20,12 +20,24 @@
 - Linux 裸 Node + PM2 部署材料：`deploy/README.md`、`deploy/ecosystem.config.cjs`、`deploy/nginx.conf.example`
 - 环境变量 `MCP_ENABLED`：控制 `/mcp` 开关（`true` / `1` / `on` / `yes` 开启）
 - Remote MCP Bearer 鉴权：环境变量 `MCP_TOKEN`；请求头 `Authorization: Bearer <token>`
+- 收藏页单人 / 「同步全部」串行写入本地历史库（尊重每人 90s 冷却，可取消）
+- 对局事件轴点击跳转 `?tab=replay&t=`；回放按 URL 秒级定位；跟随 + kill/knock 高亮
+- 武器 Tab 遥测解析进度（parsedCount/sampleSize）与引导 CTA
+- 「同步近况」可选顺带 parse 最近 3 场遥测（默认关）
+- 地图 Tab 点击按 `map=` 过滤概览对局；对局页 `tab=weapons` 本场武器表
+- 玩家页对局列表：排序（时间/排名/击杀/伤害）+ 分页 + URL `sort`/`page`
+- 对比 Tab：近况/弱点并排；收藏/最近搜索快捷填 `vs=`
+- 分享页动态 OG 图：`/share/match/{id}/og`；分享卡对齐增强/降级态（ruleVersion/置信度/建议）
+- 半成品治理清单：`半成品清单.md`；deploy 备份脚本示例与单机 SLA 说明
 
 ### Changed
 
 - Remote MCP **默认关闭**；未显式开启时 `/mcp` 返回 404
 - `npm start` 固定监听 `0.0.0.0:3000`
 - README：补充生产部署入口、MCP 开关 / Token 说明与完整 Tool 表
+- 分析 Tab：样本 &lt; 5 场隐藏假雷达，展示「样本不足」
+- README / docs/04：对齐遥测增强报告 `1.1.0-telemetry` 真实行为（不再写「后续开放」）
+- Redis 全面接入标注暂缓；提额材料补齐人工提交勾选说明（不伪造已公网/已提额）
 
 ### Security
 

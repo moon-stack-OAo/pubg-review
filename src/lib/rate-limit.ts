@@ -1,5 +1,7 @@
 /**
  * 进程内滑动窗口限流（按 IP，粗粒度）。
+ * 适用于单机 / next dev。
+ * 多实例未来若共享配额需 Redis（或等价），且本模块接口需改为 async — 当前无实现。
  * 适用于单机 / next dev；多实例需换 Redis。
  *
  * TRUST_PROXY=true 时才信任 X-Forwarded-For / X-Real-IP；
