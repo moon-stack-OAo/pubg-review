@@ -222,6 +222,8 @@ curl "http://127.0.0.1:3000/api/v1/squad/stats?platform=steam&name=Nick&mates=A,
 
 已落地（务实版）：M1 查询站 → M2 无遥测报告 / 弱点 / 收藏 → M3 遥测 + 事件轴 + 2D 回放 → M4 历史库 / 武器地图对比 / CSV → 车队同场统计 → `.data` 落盘与部署材料。
 
-**明确暂缓**：完整 OAuth / 多租户、MySQL 替换 `.data`、Redis 多实例、官方地图贴图级回放、移动端专项、四平台同等验收（优先保证 steam）。
+**明确暂缓**：完整 OAuth / 多租户、MySQL 替换 `.data`、Redis 多实例、非 api-assets 贴图来源、逐房间密室、移动端专项、四平台同等验收（优先保证 steam）。
+
+下一专题（AI 可选增强 / 官方地图底图 / 载具图层）规划见本地 `docs/06-缺口补充-AI与地图.md`（`docs/` 默认 gitignore）。
 
 变更记录见 [`CHANGELOG.md`](CHANGELOG.md)。

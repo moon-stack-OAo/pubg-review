@@ -8,6 +8,7 @@
 
 ### Added
 
+- 规划文档：`docs/06-缺口补充-AI与地图.md`（可选 LLM、api-assets 底图、载具/船/POI 缺口与迭代）
 - Remote MCP Tools 扩展至 13 个（直接复用服务层）：
     - `get_player_form` — 近况 formStatus + 异常 anomalies
     - `get_player_analysis` — 近 N 场报告聚合（雷达 / 弱点 / 建议）
