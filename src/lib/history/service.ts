@@ -258,9 +258,21 @@ export const DEFAULT_WINDOW_HOURS = 24;
 export const MAX_WINDOW_HOURS = 168;
 const MAX_WINDOW_MATCHES = 100;
 
+export const DEFAULT_WINDOW_TZ = "Asia/Shanghai";
+
 export type WindowBoundsInput = {
   hours?: number;
   since?: string;
+  until?: string;
+  date?: string;
+  tz?: string;
+};
+
+export type WindowBounds = {
+  hours: number;
+  sinceMs: number;
+  untilMs: number;
+  label: "rolling" | "calendar_day";
 };
 
 export type GetPlayerWindowStatsOptions = WindowBoundsInput & {
@@ -273,37 +285,102 @@ export function clampWindowHours(raw: number | undefined): number {
   return Math.min(Math.max(Math.floor(raw), 1), MAX_WINDOW_HOURS);
 }
 
-/** since 优先于 hours；均未传时默认 24h（供个人窗）；squad 自行决定是否启用 */
-export function resolveWindowBounds(options?: WindowBoundsInput): {
-  hours: number;
-  sinceMs: number;
-  untilMs: number;
-} {
-  const untilMs = Date.now();
+/** Asia/Shanghai 固定 +08；date=YYYY-MM-DD → [当日 00:00, 次日 00:00) */
+export function resolveCalendarDayBounds(
+  date: string,
+  tz: string = DEFAULT_WINDOW_TZ,
+): WindowBounds {
+  const dateRaw = date.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+    throw new BizError("date 必须是 YYYY-MM-DD", 400, 40001);
+  }
+  const resolvedTz = tz.trim() || DEFAULT_WINDOW_TZ;
+  if (resolvedTz !== DEFAULT_WINDOW_TZ) {
+    throw new BizError("首版仅支持 tz=Asia/Shanghai", 400, 40001);
+  }
+
+  const [y, m, d] = dateRaw.split("-").map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d));
+  if (
+    probe.getUTCFullYear() !== y ||
+    probe.getUTCMonth() !== m - 1 ||
+    probe.getUTCDate() !== d
+  ) {
+    throw new BizError("date 不是合法日历日", 400, 40001);
+  }
+
+  const shanghaiOffsetMs = 8 * HOUR_MS;
+  const sinceMs = Date.UTC(y, m - 1, d) - shanghaiOffsetMs;
+  const untilMs = sinceMs + 24 * HOUR_MS;
+  return {
+    hours: 24,
+    sinceMs,
+    untilMs,
+    label: "calendar_day",
+  };
+}
+
+function assertHalfOpenSpan(sinceMs: number, untilMs: number): number {
+  if (!(sinceMs < untilMs)) {
+    throw new BizError("since 必须早于 until", 400, 40001);
+  }
+  const spanMs = untilMs - sinceMs;
+  if (spanMs > MAX_WINDOW_HOURS * HOUR_MS) {
+    throw new BizError(
+      `时间窗跨度不能超过 ${MAX_WINDOW_HOURS} 小时`,
+      400,
+      40001,
+    );
+  }
+  return Math.max(1, Math.ceil(spanMs / HOUR_MS));
+}
+
+/**
+ * 优先级：date(+tz) > since+until > since(until=now) > hours(until=now)
+ * 半开区间 [sinceMs, untilMs)；跨度超 MAX_WINDOW_HOURS 直接 400
+ */
+export function resolveWindowBounds(options?: WindowBoundsInput): WindowBounds {
+  const dateRaw = options?.date?.trim();
   const sinceRaw = options?.since?.trim();
+  const untilRaw = options?.until?.trim();
+  const hasHours = options?.hours != null && Number.isFinite(options.hours);
+
+  if (dateRaw) {
+    if (sinceRaw || untilRaw || hasHours) {
+      throw new BizError("date 不能与 since/until/hours 同时使用", 400, 40001);
+    }
+    return resolveCalendarDayBounds(dateRaw, options?.tz ?? DEFAULT_WINDOW_TZ);
+  }
+
+  if (untilRaw && !sinceRaw) {
+    throw new BizError("until 需与 since 一起使用，或改用 date", 400, 40001);
+  }
+
   if (sinceRaw) {
     const sinceMs = Date.parse(sinceRaw);
     if (!Number.isFinite(sinceMs)) {
       throw new BizError("since 必须是合法 ISO 时间", 400, 40001);
     }
-    if (sinceMs > untilMs) {
-      throw new BizError("since 不能晚于当前时间", 400, 40001);
+    let untilMs: number;
+    if (untilRaw) {
+      untilMs = Date.parse(untilRaw);
+      if (!Number.isFinite(untilMs)) {
+        throw new BizError("until 必须是合法 ISO 时间", 400, 40001);
+      }
+    } else {
+      untilMs = Date.now();
     }
-    const hours = Math.max(
-      1,
-      Math.ceil((untilMs - sinceMs) / HOUR_MS),
-    );
-    return {
-      hours: Math.min(hours, MAX_WINDOW_HOURS),
-      sinceMs,
-      untilMs,
-    };
+    const hours = assertHalfOpenSpan(sinceMs, untilMs);
+    return { hours, sinceMs, untilMs, label: "rolling" };
   }
+
+  const untilMs = Date.now();
   const hours = clampWindowHours(options?.hours);
   return {
     hours,
     sinceMs: untilMs - hours * HOUR_MS,
     untilMs,
+    label: "rolling",
   };
 }
 

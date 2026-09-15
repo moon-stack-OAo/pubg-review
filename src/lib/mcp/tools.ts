@@ -267,11 +267,27 @@ export function registerPubgMcpTools(server: McpServer) {
         gameMode: z.string().optional().describe("可选游戏模式过滤"),
         limit: z.number().int().min(1).max(32).optional().describe("齐全对局样本上限，1-32，默认 20；时间窗模式下作扫描上限"),
         hours: z.number().int().min(1).max(168).optional().describe("时间窗小时数；传入则按 playedAt 过滤，不传则近 N 场"),
-        since: z.string().optional().describe("ISO 起始时间；优先于 hours"),
+        since: z.string().optional().describe("ISO 起始时间；与 until 组成半开区间"),
+        until: z.string().optional().describe("ISO 结束时间（半开）；需与 since 同用，或改用 date"),
+        date: z.string().optional().describe("自然日 YYYY-MM-DD；与 since/until/hours 互斥"),
+        tz: z.string().optional().describe("自然日时区；默认 Asia/Shanghai"),
         refresh: z.boolean().optional().describe("true 时绕过缓存强制重算"),
       }),
     },
-    async ({ platform, name, mates, mateAccountIds, gameMode, limit, hours, since, refresh }) => {
+    async ({
+      platform,
+      name,
+      mates,
+      mateAccountIds,
+      gameMode,
+      limit,
+      hours,
+      since,
+      until,
+      date,
+      tz,
+      refresh,
+    }) => {
       try {
         if ((mates?.length ?? 0) === 0 && (mateAccountIds?.length ?? 0) === 0) {
           return errorResult(new Error("请至少指定 1 名队友（mates 或 mateAccountIds）"));
@@ -285,6 +301,9 @@ export function registerPubgMcpTools(server: McpServer) {
           gameMode,
           hours,
           since,
+          until,
+          date,
+          tz,
           refresh,
         });
         return textResult(data);

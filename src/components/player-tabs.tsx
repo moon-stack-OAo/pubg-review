@@ -32,6 +32,8 @@ export function buildPlayerHref(
     mates?: string;
     limit?: string;
     hours?: string;
+    date?: string;
+    tz?: string;
     sort?: string;
     page?: string | number;
   },
@@ -46,6 +48,8 @@ export function buildPlayerHref(
   if (opts.mates) q.set("mates", opts.mates);
   if (opts.limit) q.set("limit", opts.limit);
   if (opts.hours) q.set("hours", opts.hours);
+  if (opts.date) q.set("date", opts.date);
+  if (opts.tz) q.set("tz", opts.tz);
   if (opts.sort && opts.sort !== "time") q.set("sort", opts.sort);
   const pageNum =
     opts.page == null || opts.page === ""
@@ -82,6 +86,8 @@ export function PlayerTabNav({
   mates,
   limit,
   hours,
+  date,
+  tz,
 }: {
   platform: string;
   name: string;
@@ -93,6 +99,8 @@ export function PlayerTabNav({
   mates?: string;
   limit?: string;
   hours?: string;
+  date?: string;
+  tz?: string;
 }) {
   const items: { id: PlayerTabId; label: string }[] = [
     { id: "overview", label: "概览" },
@@ -119,6 +127,8 @@ export function PlayerTabNav({
               mates: item.id === "squad" ? mates : undefined,
               limit: item.id === "squad" ? limit : undefined,
               hours: item.id === "squad" ? hours : undefined,
+              date: item.id === "squad" ? date : undefined,
+              tz: item.id === "squad" ? tz : undefined,
             })}
             aria-current={active ? "page" : undefined}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${

@@ -17,7 +17,7 @@ export function filterByGameMode(
   return matches.filter((m) => m.gameMode === gameMode);
 }
 
-/** 按 playedAt 过滤 [sinceMs, untilMs]；非法时间戳的场次丢弃 */
+/** 按 playedAt 过滤半开区间 [sinceMs, untilMs)；非法时间戳的场次丢弃 */
 export function filterByPlayedAtWindow<T extends { playedAt: string }>(
   matches: T[],
   sinceMs: number,
@@ -26,7 +26,7 @@ export function filterByPlayedAtWindow<T extends { playedAt: string }>(
   return matches.filter((m) => {
     const t = Date.parse(m.playedAt);
     if (!Number.isFinite(t)) return false;
-    return t >= sinceMs && t <= untilMs;
+    return t >= sinceMs && t < untilMs;
   });
 }
 
@@ -37,7 +37,7 @@ export function isPlayedAtInWindow(
 ): boolean {
   const t = Date.parse(playedAt);
   if (!Number.isFinite(t)) return false;
-  return t >= sinceMs && t <= untilMs;
+  return t >= sinceMs && t < untilMs;
 }
 
 export function aggregateWindowKpi(matches: HistoryMatchRecord[]): WindowKpi {

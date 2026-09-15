@@ -69,6 +69,9 @@ type PageProps = {
     mates?: string;
     limit?: string;
     hours?: string;
+    date?: string;
+    tz?: string;
+    until?: string;
     refresh?: string;
     sort?: string;
     page?: string;
@@ -105,6 +108,25 @@ function parseSquadHours(raw: string | undefined): number | undefined {
   return Math.min(Math.max(Math.floor(n), 1), 168);
 }
 
+/** 自然日 YYYY-MM-DD；非法 → undefined */
+function parseSquadDate(raw: string | undefined): string | undefined {
+  const t = raw?.trim() ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return undefined;
+  return t;
+}
+
+/** 首版仅 Asia/Shanghai；空则交给内核默认 */
+function parseSquadTz(raw: string | undefined): string | undefined {
+  const t = raw?.trim() ?? "";
+  if (!t) return undefined;
+  return t;
+}
+
+function parseSquadUntil(raw: string | undefined): string | undefined {
+  const t = raw?.trim() ?? "";
+  return t || undefined;
+}
+
 function safeDecodeURIComponent(raw: string): string {
   try {
     return decodeURIComponent(raw);
@@ -131,6 +153,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
     mates: matesParam = "",
     limit: limitParam = "",
     hours: hoursParam = "",
+    date: dateParam = "",
+    tz: tzParam = "",
+    until: untilParam = "",
     refresh: refreshParam = "",
     sort: sortParam = "",
     page: pageParam = "",
@@ -143,7 +168,11 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
   const vs = vsParam.trim() || undefined;
   const mateNames = parseMateNames(matesParam);
   const squadLimit = parseSquadLimit(limitParam);
-  const squadHours = parseSquadHours(hoursParam);
+  const squadDate = parseSquadDate(dateParam);
+  const squadTz = parseSquadTz(tzParam);
+  const squadUntil = parseSquadUntil(untilParam);
+  // date 与 hours 互斥：有合法 date 时忽略 hours
+  const squadHours = squadDate ? undefined : parseSquadHours(hoursParam);
   const matchSort = parseMatchSort(sortParam.trim() || undefined);
   const matchPageRaw = parseMatchPage(pageParam.trim() || undefined);
   // 车队 Tab：未指定 gameMode 时不过滤（避免默认 squad 漏掉 squad-fpp）；其它 Tab 保持原语义
@@ -333,6 +362,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
             limit: squadLimit,
             gameMode: squadGameMode,
             hours: squadHours,
+            date: squadDate,
+            tz: squadTz,
+            until: squadUntil,
             refresh: squadRefresh,
           });
         } catch (e) {
@@ -516,6 +548,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 ? String(squadHours)
                 : undefined
             }
+            date={tab === "squad" ? squadDate : undefined}
+            tz={tab === "squad" ? squadTz : undefined}
           />
 
           {(tab === "weapons" || tab === "maps" || tab === "compare") &&
@@ -603,6 +637,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 limit={squadLimit}
                 gameMode={squadGameMode}
                 hours={squadHours}
+                date={squadDate}
+                tz={squadTz}
                 stats={squadStats}
                 error={squadError || undefined}
               />

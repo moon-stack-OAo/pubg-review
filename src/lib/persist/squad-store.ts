@@ -13,16 +13,24 @@ export type PersistedSquadFile = {
 /** 车队统计磁盘 TTL：20 分钟 */
 export const SQUAD_DISK_TTL_MS = 20 * 60 * 1000;
 
+/** 稳定到秒的 ISO，避免毫秒抖动导致缓存键漂移 */
+export function toSecondIso(ms: number): string {
+  return new Date(Math.floor(ms / 1000) * 1000).toISOString();
+}
+
 /**
- * 缓存键：platform + 成员 accountId 排序拼接 + limit + gameMode + 时间窗
+ * 缓存键：platform + 成员 accountId 排序拼接 + limit + gameMode + 规范化 [since, until)
+ * 必须以绝对边界为准，避免仅靠 hours 导致不同 until / 自然日撞键
  */
 export function squadCacheHash(input: {
   platform: PubgPlatform;
   accountIds: string[];
   limit: number;
   gameMode: string | null;
-  hours?: number | null;
-  since?: string | null;
+  /** 规范化起点 ISO（秒）；近 N 场为空 */
+  sinceIso?: string | null;
+  /** 规范化终点 ISO（秒）；近 N 场为空 */
+  untilIso?: string | null;
 }): string {
   const ids = [...input.accountIds].sort();
   const raw = [
@@ -30,8 +38,8 @@ export function squadCacheHash(input: {
     ids.join("|"),
     String(input.limit),
     input.gameMode ?? "",
-    input.hours == null ? "" : String(input.hours),
-    input.since?.trim() ?? "",
+    input.sinceIso?.trim() ?? "",
+    input.untilIso?.trim() ?? "",
   ].join("::");
   return createHash("sha256").update(raw).digest("hex").slice(0, 32);
 }

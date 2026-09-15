@@ -31,6 +31,9 @@ export async function GET(request: Request) {
     const limitRaw = Number(searchParams.get("limit") ?? "20");
     const hours = parseOptionalHours(searchParams.get("hours"));
     const since = searchParams.get("since")?.trim() || undefined;
+    const until = searchParams.get("until")?.trim() || undefined;
+    const date = searchParams.get("date")?.trim() || undefined;
+    const tz = searchParams.get("tz")?.trim() || undefined;
     const refresh =
       searchParams.get("refresh") === "1" ||
       searchParams.get("refresh") === "true";
@@ -50,6 +53,12 @@ export async function GET(request: Request) {
         return fail(new BizError("since 必须是合法 ISO 时间"));
       }
     }
+    if (until) {
+      const untilMs = Date.parse(until);
+      if (!Number.isFinite(untilMs)) {
+        return fail(new BizError("until 必须是合法 ISO 时间"));
+      }
+    }
 
     const data = await getSquadStats({
       platform,
@@ -60,11 +69,18 @@ export async function GET(request: Request) {
       gameMode,
       hours,
       since,
+      until,
+      date,
+      tz,
       refresh,
     });
 
     return ok(data, {
       hours: data.hours,
+      since: data.since,
+      until: data.until,
+      date: data.date ?? null,
+      label: data.label ?? null,
       fullSquad: data.sample.fullSquad,
       scanned: data.sample.scanned,
       maxWindowHours: MAX_WINDOW_HOURS,

@@ -23,6 +23,9 @@ const querySchema = z
         return Math.min(Math.max(Math.floor(n), 1), 168);
       }),
     since: z.string().trim().min(1).max(64).optional(),
+    until: z.string().trim().min(1).max(64).optional(),
+    date: z.string().trim().min(1).max(32).optional(),
+    tz: z.string().trim().min(1).max(64).optional(),
     gameMode: z.string().trim().min(1).max(64).optional(),
     matchLimit: z
       .string()
@@ -36,7 +39,17 @@ const querySchema = z
   })
   .refine((v) => Boolean(v.name || v.accountId), {
     message: "name 或 accountId 不能为空",
-  });
+  })
+  .refine(
+    (v) =>
+      !(
+        v.date &&
+        (v.since != null || v.until != null || v.hours != null)
+      ),
+    {
+      message: "date 不能与 since/until/hours 同时使用",
+    },
+  );
 
 export async function GET(request: Request) {
   try {
@@ -47,6 +60,9 @@ export async function GET(request: Request) {
       accountId: searchParams.get("accountId")?.trim() || undefined,
       hours: searchParams.get("hours") ?? undefined,
       since: searchParams.get("since")?.trim() || undefined,
+      until: searchParams.get("until")?.trim() || undefined,
+      date: searchParams.get("date")?.trim() || undefined,
+      tz: searchParams.get("tz")?.trim() || undefined,
       gameMode: searchParams.get("gameMode")?.trim() || undefined,
       matchLimit: searchParams.get("matchLimit") ?? undefined,
     });
@@ -56,6 +72,9 @@ export async function GET(request: Request) {
       accountId: q.accountId,
       hours: q.hours,
       since: q.since,
+      until: q.until,
+      date: q.date,
+      tz: q.tz,
       gameMode: q.gameMode,
       matchLimit: q.matchLimit,
     });

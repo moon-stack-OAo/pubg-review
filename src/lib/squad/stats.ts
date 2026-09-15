@@ -4,8 +4,14 @@ import {
   clampWindowHours,
   DEFAULT_WINDOW_HOURS,
   resolveWindowBounds,
+  type WindowBounds,
 } from "@/lib/history/service";
-import {readPersistedSquad, squadCacheHash, writePersistedSquad,} from "@/lib/persist/squad-store";
+import {
+  readPersistedSquad,
+  squadCacheHash,
+  toSecondIso,
+  writePersistedSquad,
+} from "@/lib/persist/squad-store";
 import {mapLabel} from "@/lib/pubg/maps";
 import {getCachedPlayer} from "@/lib/pubg/service";
 import type {PubgMatchDetail, PubgParticipant, PubgPlatform,} from "@/lib/pubg/types";
@@ -269,9 +275,11 @@ async function computeSquadStats(args: {
   mates: SquadMemberRef[];
   limit: number;
   gameMode: string | null;
-  window: { hours: number; sinceMs: number; untilMs: number } | null;
+  window: WindowBounds | null;
+  date: string | null;
+  tz: string | null;
 }): Promise<SquadStatsResult> {
-  const { platform, player, mates, limit, gameMode, window } = args;
+  const { platform, player, mates, limit, gameMode, window, date, tz } = args;
 
   const requiredIds = [player.accountId, ...mates.map((m) => m.accountId)];
   const scanLimit = window ? Math.max(limit, WINDOW_SCAN_LIMIT) : limit;
@@ -423,6 +431,9 @@ async function computeSquadStats(args: {
     hours: window?.hours ?? null,
     since: window ? new Date(window.sinceMs).toISOString() : null,
     until: window ? new Date(window.untilMs).toISOString() : null,
+    date: window?.label === "calendar_day" ? date : null,
+    tz: window?.label === "calendar_day" ? tz : null,
+    label: window?.label ?? null,
     perPlayer,
     sample,
     matches,
@@ -447,9 +458,14 @@ export async function getSquadStats(
   const mateNames = parseNameList(input.mateNames);
   const mateAccountIds = parseIdList(input.mateAccountIds);
   const sinceRaw = input.since?.trim() || "";
+  const untilRaw = input.until?.trim() || "";
+  const dateRaw = input.date?.trim() || "";
+  const tzRaw = input.tz?.trim() || "";
   const hoursRaw = input.hours;
   const useWindow =
+    Boolean(dateRaw) ||
     Boolean(sinceRaw) ||
+    Boolean(untilRaw) ||
     (hoursRaw != null && Number.isFinite(hoursRaw));
 
   if (mateNames.length === 0 && mateAccountIds.length === 0) {
@@ -461,10 +477,22 @@ export async function getSquadStats(
         hours:
           hoursRaw != null && Number.isFinite(hoursRaw)
             ? clampWindowHours(hoursRaw)
-            : DEFAULT_WINDOW_HOURS,
+            : dateRaw || sinceRaw
+              ? undefined
+              : DEFAULT_WINDOW_HOURS,
         since: sinceRaw || undefined,
+        until: untilRaw || undefined,
+        date: dateRaw || undefined,
+        tz: tzRaw || undefined,
       })
     : null;
+
+  const dateOut =
+    window?.label === "calendar_day" ? dateRaw || null : null;
+  const tzOut =
+    window?.label === "calendar_day"
+      ? tzRaw || "Asia/Shanghai"
+      : null;
 
   const { value: player } = await getCachedPlayer(input.platform, playerName);
   const mates = await resolveMates(
@@ -480,8 +508,8 @@ export async function getSquadStats(
     accountIds: [player.accountId, ...mates.map((m) => m.accountId)],
     limit,
     gameMode,
-    hours: window?.hours ?? null,
-    since: sinceRaw || null,
+    sinceIso: window ? toSecondIso(window.sinceMs) : null,
+    untilIso: window ? toSecondIso(window.untilMs) : null,
   });
 
   if (!input.refresh) {
@@ -493,6 +521,9 @@ export async function getSquadStats(
         hours: cached.hours ?? null,
         since: cached.since ?? null,
         until: cached.until ?? null,
+        date: cached.date ?? null,
+        tz: cached.tz ?? null,
+        label: cached.label ?? null,
         insights: cached.insights?.length
           ? cached.insights
           : buildInsights(cached.sample, cached.perPlayer, cached.mates),
@@ -509,6 +540,8 @@ export async function getSquadStats(
     limit,
     gameMode,
     window,
+    date: dateOut,
+    tz: tzOut,
   });
   await writePersistedSquad(hash, result);
   return result;
