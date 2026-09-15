@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 
 const TABS = [
   { id: "report", label: "报告" },
@@ -58,7 +58,7 @@ export function MatchTabNav({
               : "";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border">
       <nav className="flex flex-wrap gap-1">
         {TABS.map((tab) => {
           const q = new URLSearchParams(base);
@@ -71,8 +71,8 @@ export function MatchTabNav({
               <span
                 key={tab.id}
                 title="需遥测就绪后可用"
-                className={`cursor-not-allowed rounded-lg px-3 py-1.5 text-sm text-zinc-600 ${
-                  isActive ? "bg-zinc-900/60" : ""
+                className={`-mb-px cursor-not-allowed border-b-2 border-transparent px-4 py-2 text-sm text-muted opacity-60 ${
+                  isActive ? "text-fg-secondary" : ""
                 }`}
               >
                 {tab.label}
@@ -84,10 +84,10 @@ export function MatchTabNav({
               key={tab.id}
               href={href}
               aria-current={isActive ? "page" : undefined}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-amber-500/15 text-amber-300"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                  ? "border-accent text-fg"
+                  : "border-transparent text-muted hover:text-fg"
               }`}
             >
               {tab.label}
@@ -99,10 +99,10 @@ export function MatchTabNav({
         <span
           className={`rounded-full border px-2 py-0.5 text-xs ${
             telemetryStatus === "ready"
-              ? "border-emerald-800 bg-emerald-950/40 text-emerald-300"
+              ? "border-success/40 bg-success-muted text-success"
               : telemetryStatus === "pending"
-                ? "border-amber-800 bg-amber-950/30 text-amber-300"
-                : "border-zinc-700 bg-zinc-900 text-zinc-400"
+                ? "border-warning/40 bg-warning-muted text-warning"
+                : "border-border bg-surface-2 text-fg-secondary"
           }`}
         >
           遥测：{telemetryHint}

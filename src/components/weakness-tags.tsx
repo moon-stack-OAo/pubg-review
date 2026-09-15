@@ -23,7 +23,7 @@ export function WeaknessTagChips({
 }) {
   if (tags.length === 0) {
     return (
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-muted">
         近期对局暂无明显弱点标签（或样本不足）。
       </p>
     );
@@ -45,8 +45,8 @@ export function WeaknessTagChips({
             })}
             className={`rounded-full border px-3 py-1 text-sm transition-colors ${
               active
-                ? "border-rose-500/50 bg-rose-500/20 text-rose-200"
-                : "border-zinc-700 bg-zinc-900/60 text-zinc-300 hover:border-rose-500/40 hover:text-rose-200"
+                ? "border-tag-weakness/40 bg-tag-weakness-muted text-tag-weakness"
+                : "border-border bg-surface-2 text-fg-secondary hover:border-tag-weakness/40 hover:text-tag-weakness"
             }`}
             title={`点击${active ? "清除" : "按"}「${t.label}」过滤近期对局`}
           >
@@ -63,7 +63,7 @@ export function WeaknessTagChips({
             map,
             sort,
           })}
-          className="rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-500 hover:text-zinc-300"
+          className="rounded-full border border-border-strong px-3 py-1 text-sm text-muted hover:text-fg-secondary"
         >
           清除过滤
         </Link>
@@ -88,14 +88,14 @@ export function RadarBars({ radar }: { radar: PlayerRadar }) {
         return (
           <div key={key}>
             <div className="mb-1 flex justify-between text-sm">
-              <span className="text-zinc-400">{label}</span>
-              <span className="font-medium tabular-nums text-zinc-200">
+              <span className="text-fg-secondary">{label}</span>
+              <span className="font-medium tabular-nums text-fg">
                 {value}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+            <div className="h-2 overflow-hidden rounded-full bg-surface-hover">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-600/80 to-amber-400"
+                className="h-full rounded-full bg-gradient-to-r from-accent to-accent"
                 style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
               />
             </div>

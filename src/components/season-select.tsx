@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {useRouter} from "next/navigation";
 
@@ -52,12 +52,12 @@ export function SeasonSelect({
   }
 
   return (
-    <label className="inline-flex items-center gap-2 text-sm text-zinc-400">
+    <label className="inline-flex items-center gap-2 text-sm text-fg-secondary">
       <span>赛季</span>
       <select
         value={currentSeasonId}
         onChange={(e) => onChange(e.target.value)}
-        className="max-w-[16rem] rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200"
+        className="max-w-[16rem] rounded-lg border border-border-strong bg-surface-2 px-2 py-1 text-fg"
       >
         {options.map((s) => (
           <option key={s.id} value={s.id}>

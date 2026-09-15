@@ -63,13 +63,13 @@ export function TrendChart({ trend }: { trend: PlayerTrend }) {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-zinc-300">
+        <h3 className="text-sm font-medium text-fg-secondary">
           近 14 天趋势
-          <span className="ml-2 text-xs font-normal text-zinc-500">
+          <span className="ml-2 text-xs font-normal text-muted">
             按日聚合 · 官方近况 + 本地历史
           </span>
         </h3>
-        <div className="flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900/60 p-0.5 text-xs">
+        <div className="flex gap-1 rounded-lg border border-border bg-surface-2 p-0.5 text-xs">
           {METRICS.map((m) => (
             <button
               key={m.key}
@@ -77,8 +77,8 @@ export function TrendChart({ trend }: { trend: PlayerTrend }) {
               onClick={() => setMetric(m.key)}
               className={`rounded-md px-2.5 py-1 transition ${
                 metric === m.key
-                  ? "bg-amber-500/20 text-amber-200"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-accent-muted text-accent"
+                  : "text-fg-secondary hover:text-fg"
               }`}
             >
               {m.label}
@@ -88,12 +88,12 @@ export function TrendChart({ trend }: { trend: PlayerTrend }) {
       </div>
 
       {!hasData ? (
-        <p className="text-sm text-zinc-500">近 14 天暂无可用对局数据，同步近况后可生成趋势。</p>
+        <p className="text-sm text-muted">近 14 天暂无可用对局数据，同步近况后可生成趋势。</p>
       ) : (
         <>
           <svg
             viewBox={`0 0 ${w} ${h}`}
-            className="h-36 w-full text-amber-300"
+            className="h-36 w-full text-accent"
             role="img"
             aria-label={`近14天${METRICS.find((m) => m.key === metric)?.label}趋势`}
           >
@@ -131,7 +131,7 @@ export function TrendChart({ trend }: { trend: PlayerTrend }) {
               ),
             )}
           </svg>
-          <div className="mt-1 flex justify-between text-[10px] text-zinc-600">
+          <div className="mt-1 flex justify-between text-[10px] text-muted">
             <span>{series[0]?.date}</span>
             <span>
               {min.toFixed(metric === "kd" ? 2 : 0)} –{" "}

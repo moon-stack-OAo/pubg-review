@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {useCallback, useState} from "react";
 
@@ -40,11 +40,11 @@ export function CopyShareLink({
       <button
         type="button"
         onClick={() => void onCopy()}
-        className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200 hover:border-amber-400/60 hover:bg-amber-500/20"
+        className="rounded-lg border border-accent-border bg-accent-muted px-3 py-1.5 text-sm text-accent hover:border-accent-border hover:bg-accent-muted"
       >
         复制分享链接
       </button>
-      {hint ? <span className="text-xs text-zinc-500">{hint}</span> : null}
+      {hint ? <span className="text-xs text-muted">{hint}</span> : null}
     </div>
   );
 }

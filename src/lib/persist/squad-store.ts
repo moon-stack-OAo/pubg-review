@@ -14,13 +14,15 @@ export type PersistedSquadFile = {
 export const SQUAD_DISK_TTL_MS = 20 * 60 * 1000;
 
 /**
- * 缓存键：platform + 成员 accountId 排序拼接 + limit + gameMode
+ * 缓存键：platform + 成员 accountId 排序拼接 + limit + gameMode + 时间窗
  */
 export function squadCacheHash(input: {
   platform: PubgPlatform;
   accountIds: string[];
   limit: number;
   gameMode: string | null;
+  hours?: number | null;
+  since?: string | null;
 }): string {
   const ids = [...input.accountIds].sort();
   const raw = [
@@ -28,6 +30,8 @@ export function squadCacheHash(input: {
     ids.join("|"),
     String(input.limit),
     input.gameMode ?? "",
+    input.hours == null ? "" : String(input.hours),
+    input.since?.trim() ?? "",
   ].join("::");
   return createHash("sha256").update(raw).digest("hex").slice(0, 32);
 }

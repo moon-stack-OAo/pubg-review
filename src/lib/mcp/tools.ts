@@ -265,11 +265,13 @@ export function registerPubgMcpTools(server: McpServer) {
         mates: z.array(z.string().min(1)).optional().describe("队友昵称列表"),
         mateAccountIds: z.array(z.string().min(1)).optional().describe("队友 accountId 列表"),
         gameMode: z.string().optional().describe("可选游戏模式过滤"),
-        limit: z.number().int().min(1).max(32).optional().describe("齐全对局样本上限，1-32，默认 20"),
+        limit: z.number().int().min(1).max(32).optional().describe("齐全对局样本上限，1-32，默认 20；时间窗模式下作扫描上限"),
+        hours: z.number().int().min(1).max(168).optional().describe("时间窗小时数；传入则按 playedAt 过滤，不传则近 N 场"),
+        since: z.string().optional().describe("ISO 起始时间；优先于 hours"),
         refresh: z.boolean().optional().describe("true 时绕过缓存强制重算"),
       }),
     },
-    async ({ platform, name, mates, mateAccountIds, gameMode, limit, refresh }) => {
+    async ({ platform, name, mates, mateAccountIds, gameMode, limit, hours, since, refresh }) => {
       try {
         if ((mates?.length ?? 0) === 0 && (mateAccountIds?.length ?? 0) === 0) {
           return errorResult(new Error("请至少指定 1 名队友（mates 或 mateAccountIds）"));
@@ -281,6 +283,8 @@ export function registerPubgMcpTools(server: McpServer) {
           mateAccountIds,
           limit: limit ?? 20,
           gameMode,
+          hours,
+          since,
           refresh,
         });
         return textResult(data);

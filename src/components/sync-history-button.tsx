@@ -1,19 +1,23 @@
 "use client";
 
 import {useRouter} from "next/navigation";
-import {useCallback, useState} from "react";
+import {useCallback, useId, useState} from "react";
 import {syncPlayerHistoryClient} from "@/lib/history/sync-client";
+import {Button, cn} from "@/components/ui";
 
 export function SyncHistoryButton({
   accountId,
   platform,
   name,
+  className,
 }: {
   accountId: string;
   platform: string;
   name: string;
+  className?: string;
 }) {
   const router = useRouter();
+  const parseId = useId();
   const [loading, setLoading] = useState(false);
   const [hint, setHint] = useState("");
   const [parseRecentOn, setParseRecentOn] = useState(false);
@@ -59,37 +63,41 @@ export function SyncHistoryButton({
   }, [accountId, loading, name, parseRecentOn, platform, router]);
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <label className="flex max-w-[14rem] cursor-pointer items-start gap-1.5 text-right text-xs text-zinc-500">
+    <div className={cn("flex flex-col items-end gap-1", className)}>
+      <label
+        htmlFor={parseId}
+        className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-muted"
+        title="同步时顺带解析最近 3 场遥测（较慢）"
+      >
         <input
+          id={parseId}
           type="checkbox"
-          className="mt-0.5"
+          className="size-3.5 shrink-0 accent-[var(--accent)]"
           checked={parseRecentOn}
           disabled={loading}
           onChange={(e) => setParseRecentOn(e.target.checked)}
         />
-        <span>顺带解析最近 3 场遥测（较慢）</span>
+        <span>顺带解析遥测</span>
       </label>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={onClick}
-          disabled={loading}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:border-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
-          title="将官方近况对局写入本地历史库（90s 冷却）"
-        >
-          {loading
-            ? parseRecentOn
-              ? "同步并解析中…"
-              : "同步中…"
-            : "同步近况"}
-        </button>
-        {hint ? (
-          <span className="absolute top-full right-0 z-10 mt-1 max-w-[14rem] whitespace-nowrap text-right text-xs text-zinc-500">
-            {hint}
-          </span>
-        ) : null}
-      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={onClick}
+        disabled={loading}
+        className="shrink-0"
+        title="将官方近况对局写入本地历史库（90s 冷却）"
+      >
+        {loading
+          ? parseRecentOn
+            ? "同步并解析中…"
+            : "同步中…"
+          : "同步近况"}
+      </Button>
+      {hint ? (
+        <p className="max-w-[14rem] text-right text-xs leading-snug text-muted">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

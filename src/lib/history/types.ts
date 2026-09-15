@@ -99,3 +99,30 @@ export type ComparePlayerSide = {
   gameMode: string | null;
   kpi: CompareKpi;
 };
+
+export type WindowKpi = {
+  matches: number;
+  kd: number | null;
+  winRate: number | null;
+  avgDamage: number | null;
+  avgRank: number | null;
+  avgKills: number | null;
+  top10Rate: number | null;
+  wins: number;
+  totalKills: number;
+  totalDamage: number;
+};
+
+export type PlayerWindowStats = {
+  accountId: string;
+  platform: PubgPlatform;
+  name: string | null;
+  hours: number;
+  since: string;
+  until: string;
+  gameModeFilter: string | null;
+  historyTotal: number;
+  kpi: WindowKpi;
+  matches: HistoryMatchRecord[];
+  emptyReason: "ok" | "no_history" | "no_matches_in_window";
+};

@@ -1,9 +1,9 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {BanStatusCard} from "@/components/ban-status-card";
-import {FavoriteButton} from "@/components/favorite-button";
 import {FormStatusCard} from "@/components/form-status-card";
 import {ReportTagChip} from "@/components/match-report-card";
 import {ModeFilter} from "@/components/mode-filter";
+import {PlayerHeadActions} from "@/components/player-head-actions";
 import {
   buildPlayerHref,
   CompareTabPanel,
@@ -13,11 +13,10 @@ import {
   WeaponsTabPanel,
 } from "@/components/player-tabs";
 import {SquadTabPanel} from "@/components/squad-tab";
-import {RefreshButton} from "@/components/refresh-button";
 import {SeasonSelect} from "@/components/season-select";
-import {SyncHistoryButton} from "@/components/sync-history-button";
 import {TrendChart} from "@/components/trend-chart";
-import {Card, ErrorBox, Kpi, PageShell} from "@/components/ui";
+import {AppTopbar, Card, ErrorBox, GameModeChips, Kpi, PageShell, buttonClass} from "@/components/ui";
+import {WindowStatsCard} from "@/components/window-stats-card";
 import {RadarBars, WeaknessTagChips} from "@/components/weakness-tags";
 import {getPlayerAnalysisByName, type PlayerAnalysis,} from "@/lib/analysis/player-analysis";
 import {WEAK_SAMPLE_THRESHOLD} from "@/lib/analysis/player-analysis-core";
@@ -27,8 +26,18 @@ import {EMPTY_RECENT_MATCHES, friendlyErrorMessage} from "@/lib/errors";
 import {formatDateTime, formatDuration, formatNumber, formatPercent, rankClass,} from "@/lib/format";
 import type {PubgBanType} from "@/lib/pubg/types";
 import {isPubgPlatform} from "@/lib/pubg/types";
-import type {ComparePlayerSide, MapsTabData, WeaponsTabData,} from "@/lib/history/types";
-import {buildCompareSide, getMapsTabData, getWeaponsTabData,} from "@/lib/history/service";
+import type {
+  ComparePlayerSide,
+  MapsTabData,
+  PlayerWindowStats,
+  WeaponsTabData,
+} from "@/lib/history/types";
+import {
+  buildCompareSide,
+  getMapsTabData,
+  getPlayerWindowStats,
+  getWeaponsTabData,
+} from "@/lib/history/service";
 import {getCachedSeasons, getPlayerDashboard} from "@/lib/pubg/service";
 import {getSquadStats} from "@/lib/squad/stats";
 import type {SquadStatsResult} from "@/lib/squad/types";
@@ -59,6 +68,7 @@ type PageProps = {
     vs?: string;
     mates?: string;
     limit?: string;
+    hours?: string;
     refresh?: string;
     sort?: string;
     page?: string;
@@ -87,6 +97,14 @@ function parseSquadLimit(raw: string | undefined): number {
   return Math.min(Math.max(Math.floor(n), 1), 32);
 }
 
+/** 有合法 hours 则启用时间窗；空/非法 → undefined（近 N 场） */
+function parseSquadHours(raw: string | undefined): number | undefined {
+  if (raw == null || raw.trim() === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(Math.max(Math.floor(n), 1), 168);
+}
+
 function safeDecodeURIComponent(raw: string): string {
   try {
     return decodeURIComponent(raw);
@@ -112,6 +130,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
     vs: vsParam = "",
     mates: matesParam = "",
     limit: limitParam = "",
+    hours: hoursParam = "",
     refresh: refreshParam = "",
     sort: sortParam = "",
     page: pageParam = "",
@@ -124,6 +143,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
   const vs = vsParam.trim() || undefined;
   const mateNames = parseMateNames(matesParam);
   const squadLimit = parseSquadLimit(limitParam);
+  const squadHours = parseSquadHours(hoursParam);
   const matchSort = parseMatchSort(sortParam.trim() || undefined);
   const matchPageRaw = parseMatchPage(pageParam.trim() || undefined);
   // 车队 Tab：未指定 gameMode 时不过滤（避免默认 squad 漏掉 squad-fpp）；其它 Tab 保持原语义
@@ -131,9 +151,24 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
 
   if (!isPubgPlatform(platform)) {
     return (
-      <PageShell>
-        <ErrorBox message="平台无效，请使用 steam/kakao/xbox/psn" />
-      </PageShell>
+      <div className="flex min-h-full flex-col">
+        <AppTopbar
+          subtitle="玩家页"
+          right={
+            <>
+              <Link href="/" className={buttonClass("ghost", "sm")}>
+                首页
+              </Link>
+              <Link href="/favorites" className={buttonClass("secondary", "sm")}>
+                收藏夹
+              </Link>
+            </>
+          }
+        />
+        <PageShell>
+          <ErrorBox message="平台无效，请使用 steam/kakao/xbox/psn" />
+        </PageShell>
+      </div>
     );
   }
 
@@ -151,6 +186,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
   let compareRightFormUnavailable = false;
   let squadStats: SquadStatsResult | null = null;
   let squadError = "";
+  let windowStats: PlayerWindowStats | null = null;
+  let windowError = "";
   let error = "";
   const primaryTags = new Map<string, PrimaryTagInfo | null>();
 
@@ -165,30 +202,47 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
       });
 
     if (tab === "overview") {
-      const [dashboard, seasonsResult, formResult] = await Promise.all([
-        getPlayerDashboard(platform, name, {
-          gameMode: gameMode || undefined,
-          seasonId,
-          recentLimit: 20, // 本地分页需要更多场次
-        }),
-        seasonsPromise,
-        getPlayerFormAnalysis(platform, name, {
-          gameMode: gameMode || undefined,
-          seasonId,
-        }).then(
-          (value) => ({ ok: true as const, value }),
-          (e: unknown) => ({
-            ok: false as const,
-            error: friendlyErrorMessage(e),
+      const [dashboard, seasonsResult, formResult, windowResult] =
+        await Promise.all([
+          getPlayerDashboard(platform, name, {
+            gameMode: gameMode || undefined,
+            seasonId,
+            recentLimit: 20, // 本地分页需要更多场次
           }),
-        ),
-      ]);
+          seasonsPromise,
+          getPlayerFormAnalysis(platform, name, {
+            gameMode: gameMode || undefined,
+            seasonId,
+          }).then(
+            (value) => ({ ok: true as const, value }),
+            (e: unknown) => ({
+              ok: false as const,
+              error: friendlyErrorMessage(e),
+            }),
+          ),
+          getPlayerWindowStats(platform, {
+            name,
+            hours: 24,
+            gameMode: gameMode || undefined,
+          }).then(
+            (value) => ({ ok: true as const, value }),
+            (e: unknown) => ({
+              ok: false as const,
+              error: friendlyErrorMessage(e),
+            }),
+          ),
+        ]);
       data = dashboard;
       seasons = seasonsResult.value;
       if (formResult.ok) {
         formAnalysis = formResult.value;
       } else {
         formError = formResult.error;
+      }
+      if (windowResult.ok) {
+        windowStats = windowResult.value;
+      } else {
+        windowError = windowResult.error;
       }
       // 远程已在 dashboard 聚合 primaryTags
       for (const [matchId, tag] of Object.entries(dashboard.primaryTags ?? {})) {
@@ -278,6 +332,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
             mateNames,
             limit: squadLimit,
             gameMode: squadGameMode,
+            hours: squadHours,
             refresh: squadRefresh,
           });
         } catch (e) {
@@ -375,54 +430,59 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
     })) ?? [];
 
   return (
-    <PageShell>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-500">
-            <Link href="/" className="hover:text-zinc-300">
-              ← 返回搜索
+    <div className="flex min-h-full flex-col">
+      <AppTopbar
+        subtitle={`/player/${platform}/${name}`}
+        right={
+          <>
+            <Link href="/" className={buttonClass("ghost", "sm")}>
+              首页
             </Link>
-            <Link href="/favorites" className="hover:text-zinc-300">
-              收藏
+            <Link href="/favorites" className={buttonClass("secondary", "sm")}>
+              收藏夹
             </Link>
-          </div>
-          <h1 className="mt-2 text-2xl font-semibold">{name}</h1>
-          <p className="text-sm text-zinc-500">
-            {platform}
-            {data ? ` · ${data.player.accountId}` : ""}
-          </p>
-          {data?.renameHint.previousName &&
-          data.renameHint.knownNames.length > 1 ? (
-            <p className="mt-1 text-sm text-amber-300/90">
-              {data.renameHint.renamed ? "检测到改名：" : "曾用名："}「
-              {data.renameHint.previousName}」
-              {data.renameHint.knownNames.length > 2
-                ? ` · 共见过 ${data.renameHint.knownNames.length} 个昵称`
-                : ""}
+          </>
+        }
+      />
+      <PageShell>
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/" className={buttonClass("ghost", "sm")}>
+                ← 返回搜索
+              </Link>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight">{name}</h1>
+              <span className="inline-flex h-7 items-center rounded-full border border-border bg-surface-2 px-3 text-xs font-medium text-fg-secondary">
+                {platform}
+              </span>
+            </div>
+            <p className="font-mono text-sm text-muted">
+              {data ? data.player.accountId : ""}
             </p>
-          ) : null}
-        </div>
-        {data ? (
-          <div className="flex flex-wrap items-start gap-2">
-            <FavoriteButton
-              accountId={data.player.accountId}
-              platform={platform}
-              name={name}
-            />
-            <SyncHistoryButton
-              accountId={data.player.accountId}
-              platform={platform}
-              name={name}
-            />
-            <RefreshButton
+            {data?.renameHint.previousName &&
+            data.renameHint.knownNames.length > 1 ? (
+              <p className="text-sm text-warning">
+                {data.renameHint.renamed ? "检测到改名：" : "曾用名："}「
+                {data.renameHint.previousName}」
+                {data.renameHint.knownNames.length > 2
+                  ? ` · 共见过 ${data.renameHint.knownNames.length} 个昵称`
+                  : ""}
+              </p>
+            ) : null}
+          </div>
+          {data ? (
+            <PlayerHeadActions
               accountId={data.player.accountId}
               platform={platform}
               name={name}
               seasonId={seasonId}
             />
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      </section>
 
       {error && <ErrorBox message={error} />}
 
@@ -449,6 +509,11 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
             limit={
               tab === "squad" && squadLimit !== 20
                 ? String(squadLimit)
+                : undefined
+            }
+            hours={
+              tab === "squad" && squadHours != null
+                ? String(squadHours)
                 : undefined
             }
           />
@@ -488,7 +553,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   name={name}
                 />
               ) : (
-                <p className="text-sm text-zinc-500">暂无数据</p>
+                <p className="text-sm text-muted">暂无数据</p>
               )}
             </Card>
           ) : tab === "maps" ? (
@@ -504,7 +569,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   gameMode={gameMode || undefined}
                 />
               ) : (
-                <p className="text-sm text-zinc-500">暂无数据</p>
+                <p className="text-sm text-muted">暂无数据</p>
               )}
             </Card>
           ) : tab === "compare" ? (
@@ -537,6 +602,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 mates={mateNames}
                 limit={squadLimit}
                 gameMode={squadGameMode}
+                hours={squadHours}
                 stats={squadStats}
                 error={squadError || undefined}
               />
@@ -553,8 +619,16 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 seasonId={seasonId}
               />
 
+              <WindowStatsCard
+                stats={windowStats}
+                error={windowError || undefined}
+                platform={platform}
+                accountId={data.player.accountId}
+                name={name}
+              />
+
               <Card>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-fg-secondary">
                   <div className="flex flex-wrap items-center gap-3">
                     {seasons.length > 0 ? (
                       <SeasonSelect
@@ -570,12 +644,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                     ) : (
                       <span>赛季：{data.season.seasonId}</span>
                     )}
-                    <span className="text-zinc-600">·</span>
+                    <span className="text-muted">·</span>
                     <span>
                       缓存：玩家 {data.cached.player ? "命中" : "未命中"} / 赛季{" "}
                       {data.cached.season ? "命中" : "未命中"}
                     </span>
-                    <span className="text-zinc-600">·</span>
+                    <span className="text-muted">·</span>
                     <span>本地历史库 {data.historyTotal} 场</span>
                   </div>
                 </div>
@@ -607,15 +681,15 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                     <Kpi label="Top10" value={formatPercent(stats.top10Rate)} />
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted">
                     当前赛季暂无可用模式数据。
                   </p>
                 )}
 
-                <div className="mt-5 border-t border-zinc-800 pt-4">
-                  <h3 className="mb-2 text-sm font-medium text-zinc-300">
+                <div className="mt-5 border-t border-border pt-4">
+                  <h3 className="mb-2 text-sm font-medium text-fg-secondary">
                     弱点标签
-                    <span className="ml-2 text-xs font-normal text-zinc-500">
+                    <span className="ml-2 text-xs font-normal text-muted">
                       近 {data.recentMatches.length} 场主因聚合 · 点击过滤对局
                     </span>
                   </h3>
@@ -631,7 +705,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   />
                 </div>
 
-                <div className="mt-5 border-t border-zinc-800 pt-4">
+                <div className="mt-5 border-t border-border pt-4">
                   <TrendChart trend={data.trend} />
                 </div>
               </Card>
@@ -641,12 +715,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   <h2 className="font-medium">
                     对局列表
                     {activeTag ? (
-                      <span className="ml-2 text-sm font-normal text-rose-300">
+                      <span className="ml-2 text-sm font-normal text-danger">
                         · 已按标签过滤
                       </span>
                     ) : null}
                     {activeMap ? (
-                      <span className="ml-2 text-sm font-normal text-emerald-300">
+                      <span className="ml-2 text-sm font-normal text-success">
                         · 已按地图过滤
                       </span>
                     ) : null}
@@ -656,7 +730,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                       </span>
                     ) : null}
                   </h2>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-muted">
                     {sortedMatches.length} 场
                     {sortedMatches.length > MATCH_PAGE_SIZE
                       ? ` · 第 ${matchPage}/${matchTotalPages} 页`
@@ -668,7 +742,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 </div>
 
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-zinc-500">排序</span>
+                  <span className="text-muted">排序</span>
                   {(
                     [
                       { key: "time", label: "时间" },
@@ -687,8 +761,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                         })}
                         className={`rounded-full px-2.5 py-0.5 ${
                           active
-                            ? "bg-amber-500 text-black"
-                            : "border border-zinc-700 text-zinc-300 hover:border-amber-500/50"
+                            ? "bg-accent text-accent-fg"
+                            : "border border-border-strong text-fg-secondary hover:border-accent-border"
                         }`}
                       >
                         {item.label}
@@ -702,7 +776,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                         clearMap: true,
                         page: 1,
                       })}
-                      className="ml-1 text-xs text-amber-300 hover:underline"
+                      className="ml-1 text-xs text-accent hover:underline"
                     >
                       清除过滤
                     </Link>
@@ -710,15 +784,15 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 </div>
 
                 {activeTag ? (
-                  <p className="mb-3 text-xs text-zinc-600">
+                  <p className="mb-3 text-xs text-muted">
                     标签过滤仅覆盖已生成报告的对局；本地历史库无报告场会被排除。
                   </p>
                 ) : null}
 
                 {mergedMatches.length === 0 ? (
-                  <p className="text-sm text-zinc-500">{EMPTY_RECENT_MATCHES}</p>
+                  <p className="text-sm text-muted">{EMPTY_RECENT_MATCHES}</p>
                 ) : sortedMatches.length === 0 ? (
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted">
                     当前过滤条件下无匹配对局，
                     <Link
                       href={matchListHref({
@@ -726,7 +800,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                         clearMap: true,
                         page: 1,
                       })}
-                      className="text-amber-300 hover:underline"
+                      className="text-accent hover:underline"
                     >
                       清除过滤
                     </Link>
@@ -743,34 +817,34 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                     />
                     {matchTotalPages > 1 ? (
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-                        <span className="text-zinc-500">
+                        <span className="text-muted">
                           每页 {MATCH_PAGE_SIZE} 场
                         </span>
                         <div className="flex flex-wrap items-center gap-2">
                           {matchPage > 1 ? (
                             <Link
                               href={matchListHref({ page: matchPage - 1 })}
-                              className="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-300 hover:border-amber-500/50"
+                              className="rounded-lg border border-border-strong px-3 py-1 text-fg-secondary hover:border-accent-border"
                             >
                               上一页
                             </Link>
                           ) : (
-                            <span className="rounded-lg border border-zinc-800 px-3 py-1 text-zinc-600">
+                            <span className="rounded-lg border border-border px-3 py-1 text-muted">
                               上一页
                             </span>
                           )}
-                          <span className="tabular-nums text-zinc-400">
+                          <span className="tabular-nums text-fg-secondary">
                             {matchPage} / {matchTotalPages}
                           </span>
                           {matchPage < matchTotalPages ? (
                             <Link
                               href={matchListHref({ page: matchPage + 1 })}
-                              className="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-300 hover:border-amber-500/50"
+                              className="rounded-lg border border-border-strong px-3 py-1 text-fg-secondary hover:border-accent-border"
                             >
                               下一页
                             </Link>
                           ) : (
-                            <span className="rounded-lg border border-zinc-800 px-3 py-1 text-zinc-600">
+                            <span className="rounded-lg border border-border px-3 py-1 text-muted">
                               下一页
                             </span>
                           )}
@@ -785,6 +859,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
         </>
       )}
     </PageShell>
+    </div>
   );
 }
 
@@ -817,7 +892,7 @@ function MatchTable({
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
-        <thead className="text-zinc-500">
+        <thead className="text-muted">
           <tr>
             <th className="px-2 py-2 font-medium">时间</th>
             <th className="px-2 py-2 font-medium">地图</th>
@@ -838,18 +913,20 @@ function MatchTable({
             return (
               <tr
                 key={m.matchId}
-                className="border-t border-zinc-800/80 hover:bg-zinc-900/50"
+                className="border-t border-border hover:bg-surface-2"
               >
                 <td className="px-2 py-2">
                   <Link
                     href={`/match/${m.matchId}?platform=${platform}&accountId=${encodeURIComponent(accountId)}&name=${encodeURIComponent(name)}`}
-                    className="text-amber-300 hover:underline"
+                    className="text-accent hover:underline"
                   >
                     {formatDateTime(m.playedAt)}
                   </Link>
                 </td>
                 <td className="px-2 py-2">{m.mapLabel}</td>
-                <td className="px-2 py-2">{m.gameMode}</td>
+                <td className="px-2 py-2">
+                  <GameModeChips gameMode={m.gameMode} size="sm" />
+                </td>
                 <td className={`px-2 py-2 font-medium ${rankClass(m.rank)}`}>
                   {m.rank == null ? "-" : `#${m.rank}`}
                 </td>
@@ -865,11 +942,11 @@ function MatchTable({
                       positive={tag.positive}
                     />
                   ) : (
-                    <span className="text-zinc-600">-</span>
+                    <span className="text-muted">-</span>
                   )}
                 </td>
                 {showSource ? (
-                  <td className="px-2 py-2 text-xs text-zinc-500">
+                  <td className="px-2 py-2 text-xs text-muted">
                     {m.source === "local" ? "本地" : "官方"}
                   </td>
                 ) : null}
@@ -898,7 +975,7 @@ function AnalysisSection({
   if (!analysis) {
     return (
       <Card>
-        <p className="text-sm text-zinc-500">分析数据加载失败或样本为空。</p>
+        <p className="text-sm text-muted">分析数据加载失败或样本为空。</p>
       </Card>
     );
   }
@@ -909,7 +986,7 @@ function AnalysisSection({
   if (sampleSize === 0) {
     return (
       <Card>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted">
           暂无可用复盘报告样本，请先同步近况或打开对局生成报告后再查看分析。
         </p>
       </Card>
@@ -921,14 +998,14 @@ function AnalysisSection({
       <Card>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-medium">综合能力（粗算）</h2>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted">
             基于近 {sampleSize}{" "}
             场复盘报告聚合（降级初判或遥测增强）· range={analysis.range} ·
             仅供参考
           </p>
         </div>
         {weakSample ? (
-          <p className="text-sm text-amber-200/90">
+          <p className="text-sm text-warning">
             样本不足（{sampleSize} 场），诊断置信度低
           </p>
         ) : (
@@ -940,10 +1017,10 @@ function AnalysisSection({
         <Card>
           <h2 className="mb-3 font-medium">主要问题</h2>
           {weakSample ? (
-            <p className="mb-2 text-xs text-zinc-500">样本偏少，以下仅供参考</p>
+            <p className="mb-2 text-xs text-muted">样本偏少，以下仅供参考</p>
           ) : null}
           {analysis.topIssues.length === 0 ? (
-            <p className="text-sm text-zinc-500">近期无明显负向主因。</p>
+            <p className="text-sm text-muted">近期无明显负向主因。</p>
           ) : (
             <ul className="space-y-2">
               {analysis.topIssues.map((issue, i) => {
@@ -956,15 +1033,15 @@ function AnalysisSection({
                     key={issue.code}
                     className="flex flex-wrap items-center justify-between gap-2 text-sm"
                   >
-                    <span className="text-zinc-300">
+                    <span className="text-fg-secondary">
                       {i + 1}. {issue.label}
-                      <span className="ml-2 text-zinc-500">
+                      <span className="ml-2 text-muted">
                         （{issue.count} 场）
                       </span>
                     </span>
                     <Link
                       href={`/player/${platform}/${encodeURIComponent(name)}?${q}`}
-                      className="text-xs text-amber-300 hover:underline"
+                      className="text-xs text-accent hover:underline"
                     >
                       查看对局
                     </Link>
@@ -978,15 +1055,15 @@ function AnalysisSection({
         <Card>
           <h2 className="mb-3 font-medium">改进建议</h2>
           {weakSample ? (
-            <p className="mb-2 text-xs text-zinc-500">样本偏少，以下仅供参考</p>
+            <p className="mb-2 text-xs text-muted">样本偏少，以下仅供参考</p>
           ) : null}
           {analysis.suggestions.length === 0 ? (
-            <p className="text-sm text-zinc-500">暂无聚合建议。</p>
+            <p className="text-sm text-muted">暂无聚合建议。</p>
           ) : (
-            <ul className="space-y-1.5 text-sm text-zinc-300">
+            <ul className="space-y-1.5 text-sm text-fg-secondary">
               {analysis.suggestions.map((line, i) => (
                 <li key={i} className="flex gap-2">
-                  <span className="text-amber-600">→</span>
+                  <span className="text-accent">→</span>
                   <span>{line}</span>
                 </li>
               ))}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {useCallback, useEffect, useMemo, useRef, useState,} from "react";
 import {formatDuration} from "@/lib/format";
@@ -416,7 +416,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-500">
+      <div className="rounded-2xl border border-border bg-surface p-4 text-sm text-muted">
         加载回放数据…
       </div>
     );
@@ -424,7 +424,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-900/50 bg-rose-950/20 p-4 text-sm text-rose-200">
+      <div className="rounded-2xl border border-danger/40 bg-danger-muted p-4 text-sm text-danger">
         {error}
       </div>
     );
@@ -433,16 +433,16 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   if (!data || data.status !== "ready") {
     const msg = statusMessage(data?.status ?? "none", data?.errorMessage ?? null);
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-        <p className="text-sm text-zinc-400">{msg}</p>
-        <p className="mt-2 text-xs text-zinc-600">
+      <div className="rounded-2xl border border-border bg-surface p-4">
+        <p className="text-sm text-fg-secondary">{msg}</p>
+        <p className="mt-2 text-xs text-muted">
           报告与积分板不受影响；可稍后重试解析。
         </p>
         <button
           type="button"
           disabled={parsing || data?.status === "pending"}
           onClick={() => void load({ forceParse: true })}
-          className="mt-3 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm hover:border-amber-500/50 disabled:opacity-50"
+          className="mt-3 rounded-lg border border-border-strong px-3 py-1.5 text-sm hover:border-accent-border disabled:opacity-50"
         >
           {data?.status === "pending" || parsing ? "解析中…" : "触发解析"}
         </button>
@@ -451,10 +451,10 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+    <div className="rounded-2xl border border-border bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">2D 回放（MVP）</h2>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-muted">
           {data.mapName} · 坐标粗归一 · 非官方贴图
         </span>
       </div>
@@ -464,7 +464,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         width={640}
         height={640}
         aria-label="对局 2D 回放画布"
-        className="mx-auto max-h-[70vh] w-full max-w-xl rounded-lg border border-zinc-800 bg-black"
+        className="mx-auto max-h-[70vh] w-full max-w-xl rounded-lg border border-border bg-black"
       />
 
       <div className="mt-3 space-y-3">
@@ -472,7 +472,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
           <button
             type="button"
             onClick={() => setPlaying((p) => !p)}
-            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm hover:border-amber-500/50"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm hover:border-accent-border"
           >
             {playing ? "暂停" : "播放"}
           </button>
@@ -483,14 +483,14 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
               onClick={() => setSpeed(s)}
               className={`rounded-md px-2 py-1 text-xs ${
                 speed === s
-                  ? "bg-amber-500/20 text-amber-300"
-                  : "bg-zinc-900 text-zinc-400"
+                  ? "bg-accent-muted text-accent"
+                  : "bg-surface-2 text-fg-secondary"
               }`}
             >
               {s}x
             </button>
           ))}
-          <span className="ml-auto font-mono text-xs text-zinc-400">
+          <span className="ml-auto font-mono text-xs text-fg-secondary">
             {formatDuration(Math.floor(t))} / {formatDuration(duration)}
           </span>
         </div>
@@ -506,10 +506,10 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
             setPlaying(false);
             setT(Number(e.target.value));
           }}
-          className="w-full accent-amber-500"
+          className="w-full accent-accent"
         />
 
-        <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
+        <div className="flex flex-wrap gap-3 text-xs text-fg-secondary">
           {accountId ? (
             <label className="flex items-center gap-1.5">
               <input
@@ -545,7 +545,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
                   }
                 />
                 {label}
-                {noGun ? <span className="text-zinc-600">（无数据）</span> : null}
+                {noGun ? <span className="text-muted">（无数据）</span> : null}
               </label>
             );
           })}

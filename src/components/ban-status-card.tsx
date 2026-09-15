@@ -1,12 +1,12 @@
-import {Card} from "@/components/ui";
+﻿import {Card} from "@/components/ui";
 import {getBanStatusView} from "@/lib/pubg/ban";
 import type {PubgBanType} from "@/lib/pubg/types";
 
 const TONE_CLASS: Record<string, string> = {
-  ok: "border-emerald-800/60 bg-emerald-950/30 text-emerald-300",
-  warn: "border-amber-800/60 bg-amber-950/30 text-amber-300",
-  bad: "border-rose-800/60 bg-rose-950/30 text-rose-300",
-  unknown: "border-zinc-700 bg-zinc-900/50 text-zinc-300",
+  ok: "border-success/40 bg-success-muted text-success",
+  warn: "border-warning/40 bg-warning-muted text-warning",
+  bad: "border-danger/40 bg-danger-muted text-danger",
+  unknown: "border-border-strong bg-surface-2 text-fg-secondary",
 };
 
 export function BanStatusCard({

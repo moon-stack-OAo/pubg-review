@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import {useRef, useState} from "react";
@@ -175,7 +175,7 @@ export function FavoritesSyncPanel({
           type="button"
           onClick={() => void onSyncAll()}
           disabled={batchRunning || anyRowRunning || items.length === 0}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:border-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-border-strong px-3 py-2 text-sm hover:border-success/50 disabled:cursor-not-allowed disabled:opacity-50"
           title="串行同步全部收藏玩家近况（每人约 90s 冷却）"
         >
           {batchRunning ? "同步全部中…" : "同步全部"}
@@ -184,20 +184,20 @@ export function FavoritesSyncPanel({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:border-rose-500/40 hover:text-rose-300"
+            className="rounded-lg border border-border-strong px-3 py-2 text-sm text-fg-secondary hover:border-danger/40 hover:text-danger"
           >
             取消
           </button>
         ) : null}
         {progressText ? (
-          <span className="text-xs text-zinc-500">{progressText}</span>
+          <span className="text-xs text-muted">{progressText}</span>
         ) : null}
       </div>
 
       <Card>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="text-zinc-500">
+            <thead className="text-muted">
               <tr>
                 <th className="px-2 py-2 font-medium">昵称</th>
                 <th className="px-2 py-2 font-medium">平台</th>
@@ -213,20 +213,20 @@ export function FavoritesSyncPanel({
                 const hint = hints[key];
                 const disabled = batchRunning || running;
                 return (
-                  <tr key={key} className="border-t border-zinc-800/80">
+                  <tr key={key} className="border-t border-border">
                     <td className="px-2 py-2">
                       <Link
                         href={`/player/${item.platform}/${encodeURIComponent(item.name)}`}
-                        className="text-amber-300 hover:underline"
+                        className="text-accent hover:underline"
                       >
                         {item.name}
                       </Link>
-                      <div className="mt-0.5 text-xs text-zinc-600">
+                      <div className="mt-0.5 text-xs text-muted">
                         {item.accountId}
                       </div>
                     </td>
                     <td className="px-2 py-2">{item.platform}</td>
-                    <td className="px-2 py-2 text-zinc-400">
+                    <td className="px-2 py-2 text-fg-secondary">
                       {formatDateTime(item.savedAt)}
                     </td>
                     <td className="px-2 py-2">
@@ -236,13 +236,13 @@ export function FavoritesSyncPanel({
                             type="button"
                             onClick={() => void onSyncOne(item)}
                             disabled={disabled}
-                            className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:border-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-md border border-border-strong px-2 py-1 text-xs text-fg-secondary hover:border-success/50 disabled:cursor-not-allowed disabled:opacity-50"
                             title="将官方近况对局写入本地历史库（90s 冷却）"
                           >
                             {running ? "同步中…" : "同步近况"}
                           </button>
                           {hint ? (
-                            <span className="max-w-[12rem] text-xs text-zinc-500">
+                            <span className="max-w-[12rem] text-xs text-muted">
                               {hint}
                             </span>
                           ) : null}
@@ -250,7 +250,7 @@ export function FavoritesSyncPanel({
                         <button
                           type="button"
                           onClick={() => onRemove(item)}
-                          className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:border-rose-500/40 hover:text-rose-300"
+                          className="rounded-md border border-border-strong px-2 py-1 text-xs text-fg-secondary hover:border-danger/40 hover:text-danger"
                         >
                           取消收藏
                         </button>
@@ -262,7 +262,7 @@ export function FavoritesSyncPanel({
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-xs text-zinc-600">
+        <p className="mt-3 text-xs text-muted">
           本机收藏可单人/全部串行同步写入历史库；每人约 90s
           冷却；非定时任务。
         </p>

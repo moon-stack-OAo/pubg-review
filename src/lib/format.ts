@@ -28,8 +28,8 @@ export function formatDateTime(iso: string | null | undefined): string {
 }
 
 export function rankClass(rank: number | null | undefined): string {
-  if (rank == null) return "text-zinc-300";
-  if (rank === 1) return "text-amber-400";
-  if (rank <= 10) return "text-emerald-400";
-  return "text-zinc-300";
+  if (rank == null) return "text-rank-rest";
+  if (rank === 1) return "text-rank-1";
+  if (rank <= 10) return "text-rank-top10";
+  return "text-rank-rest";
 }

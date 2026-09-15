@@ -2,6 +2,7 @@
 
 import {useRouter} from "next/navigation";
 import {useCallback, useState} from "react";
+import {Button, cn} from "@/components/ui";
 
 type ApiBody = {
   code: number;
@@ -15,11 +16,13 @@ export function RefreshButton({
   platform,
   name,
   seasonId,
+  className,
 }: {
   accountId: string;
   platform: string;
   name: string;
   seasonId?: string;
+  className?: string;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -67,19 +70,20 @@ export function RefreshButton({
   }, [accountId, loading, name, platform, router, seasonId]);
 
   return (
-    <div className="relative">
-      <button
+    <div className={cn("flex flex-col items-end gap-1.5", className)}>
+      <Button
         type="button"
+        variant="primary"
         onClick={onClick}
         disabled={loading}
-        className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:border-amber-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="shrink-0"
       >
         {loading ? "刷新中…" : "刷新"}
-      </button>
+      </Button>
       {hint ? (
-        <span className="absolute top-full right-0 z-10 mt-1 whitespace-nowrap text-right text-xs text-zinc-500">
+        <p className="max-w-xs text-right text-xs leading-snug text-muted">
           {hint}
-        </span>
+        </p>
       ) : null}
     </div>
   );

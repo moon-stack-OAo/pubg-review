@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {useEffect} from "react";
 import {Card, PageShell} from "@/components/ui";
@@ -16,15 +16,15 @@ export default function AppError({
 
   return (
     <PageShell>
-      <Card className="border-rose-900/60 bg-rose-950/20">
-        <p className="font-medium text-rose-200">页面出错了</p>
-        <p className="mt-1 text-sm text-rose-300/90">
+      <Card className="border-danger/40 bg-danger-muted">
+        <p className="font-medium text-danger">页面出错了</p>
+        <p className="mt-1 text-sm text-danger">
           {error.message || "未知错误，请稍后重试"}
         </p>
         <button
           type="button"
           onClick={reset}
-          className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 hover:border-amber-500/50 hover:text-amber-200"
+          className="mt-4 rounded-lg border border-border-strong bg-surface-2 px-3 py-1.5 text-sm text-fg hover:border-accent-border hover:text-accent"
         >
           重试
         </button>

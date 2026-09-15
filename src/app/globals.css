@@ -1,26 +1,111 @@
 @import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import "../styles/design-tokens.css";
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-fg: var(--fg);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-border: var(--accent-border);
+  --color-success: var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-muted: var(--warning-muted);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-muted: var(--danger-muted);
+  --color-info: var(--info);
+  --color-info-muted: var(--info-muted);
+  --color-rank-1: var(--rank-1);
+  --color-rank-1-fg: var(--rank-1-fg);
+  --color-rank-1-muted: var(--rank-1-muted);
+  --color-rank-top10: var(--rank-top10);
+  --color-rank-top10-fg: var(--rank-top10-fg);
+  --color-rank-top10-muted: var(--rank-top10-muted);
+  --color-rank-rest: var(--rank-rest);
+  --color-rank-rest-fg: var(--rank-rest-fg);
+  --color-rank-rest-muted: var(--rank-rest-muted);
+  --color-mode-solo: var(--mode-solo);
+  --color-mode-duo: var(--mode-duo);
+  --color-mode-squad: var(--mode-squad);
+  --color-perspective-fpp: var(--perspective-fpp);
+  --color-perspective-tpp: var(--perspective-tpp);
+  --color-tag-weakness: var(--tag-weakness);
+  --color-tag-weakness-muted: var(--tag-weakness-muted);
+  --color-tag-insight: var(--tag-insight);
+  --color-tag-insight-muted: var(--tag-insight-muted);
+  --color-tag-neutral: var(--tag-neutral);
+  --color-tag-neutral-muted: var(--tag-neutral-muted);
+  --color-overlay: var(--overlay);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-ibm-plex-sans), var(--font-noto-sans-sc), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), "JetBrains Mono", ui-monospace, Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --font-display: var(--font-ibm-plex-sans), var(--font-noto-sans-sc), "Segoe UI", system-ui, sans-serif;
+  --font-body: var(--font-ibm-plex-sans), var(--font-noto-sans-sc), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  min-height: 100%;
+}
+
+.mono,
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+input::-webkit-search-decoration,
+input::-webkit-search-cancel-button,
+input::-webkit-search-results-button,
+input::-webkit-search-results-decoration {
+  display: none;
+}
+
+:focus-visible {
+  outline: none;
+}
+
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+summary:focus-visible {
+  box-shadow: var(--shadow-focus);
+}
+
+/* 输入框由外层 .input-wrap:focus-within 承担焦点环，避免双层光圈 */
+.input-wrap input:focus-visible,
+.input-wrap textarea:focus-visible,
+.input-wrap select:focus-visible {
+  box-shadow: none;
 }

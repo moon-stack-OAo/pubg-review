@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {Card} from "@/components/ui";
 import {aggregateWeaponsFromTelemetry} from "@/lib/history/aggregate";
 import {readParsedEvents} from "@/lib/telemetry/storage";
@@ -25,11 +25,11 @@ export async function MatchWeaponsPanel({
     return (
       <Card>
         <h2 className="font-medium">本场武器</h2>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="mt-2 text-sm text-muted">
           遥测尚未就绪，无法统计本场武器击杀/倒地。
         </p>
-        <p className="mt-3 text-sm text-zinc-400">
-          <Link href={timelineHref} className="text-amber-300 hover:underline">
+        <p className="mt-3 text-sm text-fg-secondary">
+          <Link href={timelineHref} className="text-accent hover:underline">
             打开事件轴
           </Link>
           或回放以触发解析，完成后再回来查看。
@@ -42,7 +42,7 @@ export async function MatchWeaponsPanel({
     return (
       <Card>
         <h2 className="font-medium">本场武器</h2>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="mt-2 text-sm text-muted">
           请从玩家页进入（带 accountId）以查看个人本场武器统计。
         </p>
       </Card>
@@ -54,12 +54,12 @@ export async function MatchWeaponsPanel({
     return (
       <Card>
         <h2 className="font-medium">本场武器</h2>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="mt-2 text-sm text-muted">
           遥测标记为就绪，但暂无解析事件。
         </p>
-        <p className="mt-3 text-sm text-zinc-400">
+        <p className="mt-3 text-sm text-fg-secondary">
           可尝试
-          <Link href={timelineHref} className="text-amber-300 hover:underline">
+          <Link href={timelineHref} className="text-accent hover:underline">
             打开事件轴
           </Link>
           重新触发解析。
@@ -73,7 +73,7 @@ export async function MatchWeaponsPanel({
     return (
       <Card>
         <h2 className="font-medium">本场武器</h2>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="mt-2 text-sm text-muted">
           暂无本场武器击杀/倒地。
         </p>
       </Card>
@@ -87,7 +87,7 @@ export async function MatchWeaponsPanel({
       <h2 className="mb-3 font-medium">本场武器</h2>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
-          <thead className="text-zinc-500">
+          <thead className="text-muted">
             <tr>
               <th className="px-2 py-2 font-medium">武器</th>
               <th className="px-2 py-2 font-medium">击杀</th>
@@ -102,15 +102,15 @@ export async function MatchWeaponsPanel({
               return (
                 <tr
                   key={w.weaponId}
-                  className="border-t border-zinc-800/80"
+                  className="border-t border-border"
                 >
-                  <td className="px-2 py-2 text-zinc-200">{w.label}</td>
+                  <td className="px-2 py-2 text-fg">{w.label}</td>
                   <td className="px-2 py-2">{w.kills}</td>
                   <td className="px-2 py-2">{w.knocks}</td>
                   <td className="px-2 py-2">
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-hover">
                       <div
-                        className="h-full rounded-full bg-amber-500"
+                        className="h-full rounded-full bg-accent"
                         style={{ width: `${pct}%` }}
                       />
                     </div>

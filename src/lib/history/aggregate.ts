@@ -3,7 +3,8 @@ import type {
     MapAggRow,
     ParticipantCombatAgg,
     WeaponAggRow,
-    WeaponsTabData
+    WeaponsTabData,
+    WindowKpi,
 } from "@/lib/history/types";
 import {mapLabel} from "@/lib/pubg/maps";
 import type {ParsedTelemetry} from "@/lib/telemetry/types";
@@ -14,6 +15,87 @@ export function filterByGameMode(
 ): HistoryMatchRecord[] {
   if (!gameMode) return matches;
   return matches.filter((m) => m.gameMode === gameMode);
+}
+
+/** 按 playedAt 过滤 [sinceMs, untilMs]；非法时间戳的场次丢弃 */
+export function filterByPlayedAtWindow<T extends { playedAt: string }>(
+  matches: T[],
+  sinceMs: number,
+  untilMs = Date.now(),
+): T[] {
+  return matches.filter((m) => {
+    const t = Date.parse(m.playedAt);
+    if (!Number.isFinite(t)) return false;
+    return t >= sinceMs && t <= untilMs;
+  });
+}
+
+export function isPlayedAtInWindow(
+  playedAt: string,
+  sinceMs: number,
+  untilMs = Date.now(),
+): boolean {
+  const t = Date.parse(playedAt);
+  if (!Number.isFinite(t)) return false;
+  return t >= sinceMs && t <= untilMs;
+}
+
+export function aggregateWindowKpi(matches: HistoryMatchRecord[]): WindowKpi {
+  const n = matches.length;
+  if (n === 0) {
+    return {
+      matches: 0,
+      kd: null,
+      winRate: null,
+      avgDamage: null,
+      avgRank: null,
+      avgKills: null,
+      top10Rate: null,
+      wins: 0,
+      totalKills: 0,
+      totalDamage: 0,
+    };
+  }
+
+  let kills = 0;
+  let damage = 0;
+  let wins = 0;
+  let top10 = 0;
+  let rankSum = 0;
+  let rankCount = 0;
+  let deathsApprox = 0;
+
+  for (const m of matches) {
+    kills += m.kills;
+    damage += m.damage;
+    if (m.rank === 1) wins += 1;
+    if (m.rank != null && m.rank <= 10) top10 += 1;
+    if (m.rank != null) {
+      rankSum += m.rank;
+      rankCount += 1;
+      if (m.rank > 1) deathsApprox += 1;
+    }
+  }
+
+  const kd =
+    deathsApprox > 0
+      ? Number((kills / deathsApprox).toFixed(2))
+      : kills > 0
+        ? Number(kills.toFixed(2))
+        : 0;
+
+  return {
+    matches: n,
+    kd,
+    winRate: Number((wins / n).toFixed(4)),
+    avgDamage: Number((damage / n).toFixed(1)),
+    avgRank: rankCount > 0 ? Number((rankSum / rankCount).toFixed(1)) : null,
+    avgKills: Number((kills / n).toFixed(2)),
+    top10Rate: Number((top10 / n).toFixed(4)),
+    wins,
+    totalKills: kills,
+    totalDamage: Number(damage.toFixed(1)),
+  };
 }
 
 export function aggregateMaps(matches: HistoryMatchRecord[]): MapAggRow[] {

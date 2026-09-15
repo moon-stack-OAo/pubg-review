@@ -1,0 +1,153 @@
+/**
+ * PUBG Review — Design Tokens
+ * 映射目标：Next.js 16 + React 19 + Tailwind 4
+ * 视觉：战术电竞舱（深色、高密度、可解释复盘）
+ */
+
+:root {
+  /* ——— Foundations ——— */
+  --bg: oklch(13.5% 0.018 250);
+  --bg-elevated: oklch(16% 0.02 250);
+  --surface: oklch(18.5% 0.022 250);
+  --surface-2: oklch(21% 0.024 250);
+  --surface-hover: oklch(24% 0.026 250);
+  --fg: oklch(94% 0.012 250);
+  --fg-secondary: oklch(78% 0.02 250);
+  --muted: oklch(58% 0.022 250);
+  --border: oklch(28% 0.024 250);
+  --border-strong: oklch(36% 0.028 250);
+  --accent: oklch(72% 0.13 210);
+  --accent-fg: oklch(14% 0.02 250);
+  --accent-muted: oklch(72% 0.13 210 / 0.16);
+  --accent-border: oklch(72% 0.13 210 / 0.42);
+
+  /* ——— Semantic / Status ——— */
+  --success: oklch(72% 0.15 145);
+  --success-fg: oklch(18% 0.04 145);
+  --success-muted: oklch(72% 0.15 145 / 0.14);
+  --warning: oklch(78% 0.14 75);
+  --warning-fg: oklch(22% 0.05 75);
+  --warning-muted: oklch(78% 0.14 75 / 0.14);
+  --danger: oklch(64% 0.2 25);
+  --danger-fg: oklch(98% 0.01 25);
+  --danger-muted: oklch(64% 0.2 25 / 0.14);
+  --info: oklch(70% 0.12 250);
+  --info-muted: oklch(70% 0.12 250 / 0.14);
+
+  /* ——— Ranking ——— */
+  --rank-1: oklch(82% 0.14 88);
+  --rank-1-fg: oklch(22% 0.06 88);
+  --rank-1-muted: oklch(82% 0.14 88 / 0.16);
+  --rank-top10: oklch(72% 0.16 145);
+  --rank-top10-fg: oklch(18% 0.05 145);
+  --rank-top10-muted: oklch(72% 0.16 145 / 0.14);
+  --rank-rest: oklch(58% 0.022 250);
+  --rank-rest-fg: oklch(94% 0.012 250);
+  --rank-rest-muted: oklch(28% 0.024 250);
+
+  /* ——— Mode tags ——— */
+  --mode-solo: oklch(70% 0.12 250);
+  --mode-duo: oklch(72% 0.13 210);
+  --mode-squad: oklch(74% 0.12 300);
+  --perspective-fpp: oklch(78% 0.12 55);
+  --perspective-tpp: oklch(68% 0.08 200);
+
+  /* ——— Weakness / Insight tags ——— */
+  --tag-weakness: oklch(64% 0.18 25);
+  --tag-weakness-muted: oklch(64% 0.18 25 / 0.14);
+  --tag-insight: oklch(72% 0.13 210);
+  --tag-insight-muted: oklch(72% 0.13 210 / 0.14);
+  --tag-neutral: oklch(58% 0.022 250);
+  --tag-neutral-muted: oklch(28% 0.024 250);
+
+  /* ——— Overlay / Focus ——— */
+  --overlay: oklch(8% 0.02 250 / 0.72);
+  --ring: oklch(72% 0.13 210 / 0.55);
+  --scrim: oklch(8% 0.02 250 / 0.55);
+
+  /* ——— Typography ——— */
+  --font-display: "IBM Plex Sans", "Noto Sans SC", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Noto Sans SC", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-kpi: 2.25rem;
+  --text-kpi-lg: 2.75rem;
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.04em;
+  --tracking-label: 0.06em;
+
+  /* ——— Spacing (4px base) ——— */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ——— Radius ——— */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-pill: 999px;
+
+  /* ——— Elevation ——— */
+  --shadow-sm: 0 1px 0 oklch(0% 0 0 / 0.35), 0 1px 2px oklch(0% 0 0 / 0.28);
+  --shadow-md: 0 4px 12px oklch(0% 0 0 / 0.35), 0 1px 0 oklch(100% 0 0 / 0.03) inset;
+  --shadow-lg: 0 12px 32px oklch(0% 0 0 / 0.45);
+  --shadow-focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+
+  /* ——— Borders / Hairlines ——— */
+  --hairline: 1px solid var(--border);
+  --hairline-strong: 1px solid var(--border-strong);
+
+  /* ——— Motion ——— */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+
+  /* ——— Layout ——— */
+  --nav-width: 14.5rem;
+  --nav-collapsed: 4rem;
+  --header-height: 3.25rem;
+  --content-max: 80rem;
+  --kpi-min: 10.5rem;
+
+  /* ——— Control sizes ——— */
+  --control-h-sm: 2rem;
+  --control-h-md: 2.25rem;
+  --control-h-lg: 2.75rem;
+  --touch-min: 2.75rem;
+}
+
+/* ——— Tailwind 4 @theme 映射参考（迁入时使用） ———
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-rank-1: var(--rank-1);
+  --color-rank-top10: var(--rank-top10);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+*/

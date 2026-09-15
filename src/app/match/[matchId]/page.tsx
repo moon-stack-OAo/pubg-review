@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {CopyShareLink} from "@/components/copy-share-link";
 import {ExportScoreboardCsv} from "@/components/export-scoreboard-csv";
 import {MatchReplay} from "@/components/match/match-replay";
@@ -7,7 +7,7 @@ import {MatchTimeline} from "@/components/match/match-timeline";
 import {MatchWeaponsPanel} from "@/components/match/match-weapons";
 import {MatchReportCard} from "@/components/match-report-card";
 import {MatchScoreboard} from "@/components/match-scoreboard";
-import {Card, ErrorBox, PageShell} from "@/components/ui";
+import {AppTopbar, Card, ErrorBox, GameModeChips, PageShell, buttonClass} from "@/components/ui";
 import {buildMatchReport} from "@/lib/analysis/report-service";
 import {formatDateTime, formatDuration, formatNumber, rankClass,} from "@/lib/format";
 import {friendlyErrorMessage} from "@/lib/errors";
@@ -48,9 +48,19 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
 
   if (!isPubgPlatform(platform)) {
     return (
-      <PageShell>
-        <ErrorBox message="platform 参数无效" />
-      </PageShell>
+      <div className="flex min-h-full flex-col">
+        <AppTopbar
+          subtitle="对局详情"
+          right={
+            <Link href="/" className={buttonClass("ghost", "sm")}>
+              首页
+            </Link>
+          }
+        />
+        <PageShell>
+          <ErrorBox message="platform 参数无效" />
+        </PageShell>
+      </div>
     );
   }
 
@@ -106,35 +116,49 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
   if (tab !== "report") refreshQs.set("tab", tab);
 
   return (
-    <PageShell>
+    <div className="flex min-h-full flex-col">
+      <AppTopbar
+        subtitle="对局详情"
+        right={
+          <>
+            <Link href={backHref} className={buttonClass("ghost", "sm")}>
+              {playerName ? "返回玩家" : "首页"}
+            </Link>
+            {data ? (
+              <CopyShareLink
+                matchId={matchId}
+                platform={platform}
+                accountId={accountId || undefined}
+              />
+            ) : null}
+            <Link
+              href={`/match/${matchId}?${refreshQs.toString()}`}
+              className={buttonClass("secondary", "sm")}
+            >
+              刷新
+            </Link>
+          </>
+        }
+      />
+      <PageShell>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href={backHref} className="text-sm text-zinc-500 hover:text-zinc-300">
-            ← 返回玩家页
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold">
+          <h1 className="text-2xl font-semibold tracking-tight">
             {data ? mapLabel(data.mapName) : "对局详情"}
           </h1>
-          <p className="text-sm text-zinc-500">
-            {data
-              ? `${data.gameMode} · ${formatDateTime(data.playedAt)} · 时长 ${formatDuration(data.durationSec)}`
-              : matchId}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {data ? (
-            <CopyShareLink
-              matchId={matchId}
-              platform={platform}
-              accountId={accountId || undefined}
-            />
-          ) : null}
-          <Link
-            href={`/match/${matchId}?${refreshQs.toString()}`}
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:border-amber-500/50"
-          >
-            刷新
-          </Link>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
+            {data ? (
+              <>
+                <GameModeChips gameMode={data.gameMode} />
+                <span className="font-mono">
+                  {formatDateTime(data.playedAt)} · 时长{" "}
+                  {formatDuration(data.durationSec)}
+                </span>
+              </>
+            ) : (
+              <span className="font-mono">{matchId}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -162,14 +186,14 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
                 />
               ) : accountId ? (
                 reportError ? (
-                  <Card className="border-zinc-800">
+                  <Card className="border-border">
                     <h2 className="font-medium">复盘报告</h2>
-                    <p className="mt-2 text-sm text-zinc-500">{reportError}</p>
+                    <p className="mt-2 text-sm text-muted">{reportError}</p>
                   </Card>
                 ) : !focus ? (
                   <Card>
                     <h2 className="font-medium">复盘报告</h2>
-                    <p className="mt-2 text-sm text-zinc-500">
+                    <p className="mt-2 text-sm text-muted">
                       指定的 accountId 不在本场，无法生成个人复盘。
                     </p>
                   </Card>
@@ -177,7 +201,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
               ) : (
                 <Card>
                   <h2 className="font-medium">复盘报告</h2>
-                  <p className="mt-2 text-sm text-zinc-500">
+                  <p className="mt-2 text-sm text-muted">
                     请从玩家页进入（带 accountId）以生成个人复盘报告。
                   </p>
                 </Card>
@@ -186,7 +210,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
               <Card>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-medium">个人数据</h2>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-muted">
                     {cached ? "缓存命中" : "实时拉取"} · telemetry:{telemetryStatus}
                     {telemetryError ? `（${telemetryError}）` : ""}
                   </span>
@@ -207,7 +231,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
                     <Stat label="爆头击杀" value={String(focus.headshotKills)} />
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted">
                     未指定 accountId，或该玩家不在本场。仍可查看积分板 / 事件轴。
                   </p>
                 )}
@@ -260,6 +284,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
         </>
       )}
     </PageShell>
+    </div>
   );
 }
 
@@ -273,8 +298,8 @@ function Stat({
   className?: string;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
-      <div className="text-xs text-zinc-500">{label}</div>
+    <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+      <div className="text-xs text-muted">{label}</div>
       <div className={`mt-1 text-lg font-semibold ${className}`}>{value}</div>
     </div>
   );

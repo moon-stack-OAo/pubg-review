@@ -51,6 +51,10 @@ export type SquadStatsResult = {
   mates: SquadMemberRef[];
   limit: number;
   gameMode: string | null;
+  /** 启用时间窗时返回；近 N 场模式为 null */
+  hours: number | null;
+  since: string | null;
+  until: string | null;
   perPlayer: SquadMemberStats[];
   sample: SquadSampleMeta;
   matches: SquadMatchRow[];
@@ -78,6 +82,13 @@ export type GetSquadStatsInput = {
   mateAccountIds?: string[];
   limit?: number;
   gameMode?: string;
+  /**
+   * 时间窗小时数。传入则按 playedAt 过滤（since 优先于 hours）。
+   * 不传且无 since：保持近 N 场（limit）旧行为。
+   */
+  hours?: number;
+  /** ISO 时间；有值时优先于 hours */
+  since?: string;
   /** 为 true 时绕过磁盘缓存强制重算 */
   refresh?: boolean;
 };

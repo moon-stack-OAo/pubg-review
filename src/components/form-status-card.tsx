@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {Card} from "@/components/ui";
 import {buildPlayerHref} from "@/components/player-tabs";
 import type {AnomalyItem, FormStatusCode, PlayerFormAnalysis,} from "@/lib/analysis/form-status";
@@ -9,19 +9,19 @@ const STATUS_TONE: Record<
   { card: string; score: string; chip: string }
 > = {
   normal: {
-    card: "border-emerald-800/60 bg-emerald-950/20",
-    score: "text-emerald-300",
-    chip: "border-emerald-700/50 bg-emerald-900/40 text-emerald-200",
+    card: "border-success/40 bg-success-muted",
+    score: "text-success",
+    chip: "border-success/40 bg-success-muted text-success",
   },
   soft: {
-    card: "border-amber-800/60 bg-amber-950/20",
-    score: "text-amber-300",
-    chip: "border-amber-700/50 bg-amber-900/40 text-amber-200",
+    card: "border-warning/40 bg-warning-muted",
+    score: "text-warning",
+    chip: "border-warning/40 bg-warning-muted text-warning",
   },
   poor: {
-    card: "border-rose-800/60 bg-rose-950/20",
-    score: "text-rose-300",
-    chip: "border-rose-700/50 bg-rose-900/40 text-rose-200",
+    card: "border-danger/40 bg-danger-muted",
+    score: "text-danger",
+    chip: "border-danger/40 bg-danger-muted text-danger",
   },
 };
 
@@ -62,18 +62,18 @@ function AnomalyRow({
     });
     const firstMatchId = item.matchIds[0];
     return (
-      <li className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-300">
+      <li className="flex flex-wrap items-center justify-between gap-2 text-sm text-fg-secondary">
         <span>
           连续 {item.count} 场「{item.tagLabel}」
         </span>
         <span className="flex flex-wrap gap-3 text-xs">
-          <Link href={tagHref} className="text-amber-300 hover:underline">
+          <Link href={tagHref} className="text-accent hover:underline">
             按标签过滤
           </Link>
           {firstMatchId ? (
             <Link
               href={matchHref(firstMatchId, platform, accountId, name)}
-              className="text-zinc-400 hover:text-amber-300 hover:underline"
+              className="text-fg-secondary hover:text-accent hover:underline"
             >
               首场对局
             </Link>
@@ -93,16 +93,16 @@ function AnomalyRow({
     .join(" · ");
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-300">
+    <li className="flex flex-wrap items-center justify-between gap-2 text-sm text-fg-secondary">
       <span>
         {label}
         {meta ? (
-          <span className="ml-2 text-xs text-zinc-500">{meta}</span>
+          <span className="ml-2 text-xs text-muted">{meta}</span>
         ) : null}
       </span>
       <Link
         href={matchHref(item.matchId, platform, accountId, name)}
-        className="text-xs text-amber-300 hover:underline"
+        className="text-xs text-accent hover:underline"
       >
         查看对局
       </Link>
@@ -130,8 +130,8 @@ export function FormStatusCard({
   if (error || !analysis) {
     return (
       <Card>
-        <p className="text-sm font-medium text-zinc-300">近况现状</p>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="text-sm font-medium text-fg-secondary">近况现状</p>
+        <p className="mt-2 text-sm text-muted">
           {error
             ? `近况分析暂不可用：${error}`
             : "近况分析暂不可用，请稍后重试。"}
@@ -147,7 +147,7 @@ export function FormStatusCard({
     <Card className={tone.card}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-zinc-500">近况现状</p>
+          <p className="text-xs text-muted">近况现状</p>
           <div className="mt-1 flex flex-wrap items-baseline gap-3">
             {overallScore != null ? (
               <span className={`text-3xl font-semibold tracking-tight ${tone.score}`}>
@@ -158,16 +158,16 @@ export function FormStatusCard({
               {form.label}
             </span>
           </div>
-          <p className="mt-2 text-sm text-zinc-300">{form.summary}</p>
+          <p className="mt-2 text-sm text-fg-secondary">{form.summary}</p>
         </div>
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted">
           近 {form.recent.sampleSize} 场样本
         </p>
       </div>
 
       {form.needImprove.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-zinc-500">需提升</span>
+          <span className="text-xs text-muted">需提升</span>
           {form.needImprove.map((item) => (
             <span
               key={item}
@@ -181,20 +181,20 @@ export function FormStatusCard({
 
       {form.season &&
       (form.season.avgDamage != null || form.season.kd != null) ? (
-        <p className="mt-3 text-xs text-zinc-500">
+        <p className="mt-3 text-xs text-muted">
           赛季伤 {formatNumber(form.season.avgDamage, 0)} / KD{" "}
           {formatNumber(form.season.kd, 2)}
-          <span className="mx-1.5 text-zinc-700">vs</span>
+          <span className="mx-1.5 text-muted">vs</span>
           近 {form.recent.sampleSize} 场伤{" "}
           {formatNumber(form.recent.avgDamage, 0)} / KD{" "}
           {formatNumber(form.recent.kd, 2)}
         </p>
       ) : null}
 
-      <div className="mt-4 border-t border-zinc-800/80 pt-3">
-        <h3 className="mb-2 text-sm font-medium text-zinc-300">异常</h3>
+      <div className="mt-4 border-t border-border pt-3">
+        <h3 className="mb-2 text-sm font-medium text-fg-secondary">异常</h3>
         {anomalies.length === 0 ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             近样本未检出相对自身的明显异常
           </p>
         ) : (

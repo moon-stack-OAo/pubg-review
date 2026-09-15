@@ -1,4 +1,10 @@
 import {BizError} from "@/lib/errors";
+import {isPlayedAtInWindow} from "@/lib/history/aggregate";
+import {
+  clampWindowHours,
+  DEFAULT_WINDOW_HOURS,
+  resolveWindowBounds,
+} from "@/lib/history/service";
 import {readPersistedSquad, squadCacheHash, writePersistedSquad,} from "@/lib/persist/squad-store";
 import {mapLabel} from "@/lib/pubg/maps";
 import {getCachedPlayer} from "@/lib/pubg/service";
@@ -15,6 +21,8 @@ import type {
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 32;
+/** 时间窗模式下多扫一些候选，避免近 N 场都落在窗外 */
+const WINDOW_SCAN_LIMIT = 32;
 const MAX_MATES = 3;
 /** 场均击杀/伤害低于队内均值该比例视为贡献偏低 */
 const LOW_CONTRIB_RATIO = 0.6;
@@ -261,14 +269,16 @@ async function computeSquadStats(args: {
   mates: SquadMemberRef[];
   limit: number;
   gameMode: string | null;
+  window: { hours: number; sinceMs: number; untilMs: number } | null;
 }): Promise<SquadStatsResult> {
-  const { platform, player, mates, limit, gameMode } = args;
+  const { platform, player, mates, limit, gameMode, window } = args;
 
   const requiredIds = [player.accountId, ...mates.map((m) => m.accountId)];
+  const scanLimit = window ? Math.max(limit, WINDOW_SCAN_LIMIT) : limit;
   const matchIds = await collectCandidateMatchIds(
     player.accountId,
     args.playerMatchIds,
-    limit,
+    scanLimit,
   );
 
   const missingByMate: Record<string, number> = {};
@@ -294,6 +304,12 @@ async function computeSquadStats(args: {
     const match = await loadMatchPreferDisk(platform, matchId);
     if (!match) continue;
     if (!matchGameModeFamily(match.gameMode, gameMode)) continue;
+    if (
+      window &&
+      !isPlayedAtInWindow(match.playedAt, window.sinceMs, window.untilMs)
+    ) {
+      continue;
+    }
 
     scanned += 1;
     const roster = findRosterOf(match, player.accountId);
@@ -404,6 +420,9 @@ async function computeSquadStats(args: {
     mates: matesOut,
     limit,
     gameMode,
+    hours: window?.hours ?? null,
+    since: window ? new Date(window.sinceMs).toISOString() : null,
+    until: window ? new Date(window.untilMs).toISOString() : null,
     perPlayer,
     sample,
     matches,
@@ -427,10 +446,25 @@ export async function getSquadStats(
   const gameMode = input.gameMode?.trim() || null;
   const mateNames = parseNameList(input.mateNames);
   const mateAccountIds = parseIdList(input.mateAccountIds);
+  const sinceRaw = input.since?.trim() || "";
+  const hoursRaw = input.hours;
+  const useWindow =
+    Boolean(sinceRaw) ||
+    (hoursRaw != null && Number.isFinite(hoursRaw));
 
   if (mateNames.length === 0 && mateAccountIds.length === 0) {
     throw new BizError("请至少指定 1 名队友（mates 或 mateIds）");
   }
+
+  const window = useWindow
+    ? resolveWindowBounds({
+        hours:
+          hoursRaw != null && Number.isFinite(hoursRaw)
+            ? clampWindowHours(hoursRaw)
+            : DEFAULT_WINDOW_HOURS,
+        since: sinceRaw || undefined,
+      })
+    : null;
 
   const { value: player } = await getCachedPlayer(input.platform, playerName);
   const mates = await resolveMates(
@@ -446,23 +480,24 @@ export async function getSquadStats(
     accountIds: [player.accountId, ...mates.map((m) => m.accountId)],
     limit,
     gameMode,
+    hours: window?.hours ?? null,
+    since: sinceRaw || null,
   });
 
   if (!input.refresh) {
     const disk = await readPersistedSquad(hash);
     if (disk?.fresh) {
       const cached = disk.result;
-      if (!cached.insights?.length) {
-        return {
-          ...cached,
-          insights: buildInsights(
-            cached.sample,
-            cached.perPlayer,
-            cached.mates,
-          ),
-        };
-      }
-      return cached;
+      const normalized: SquadStatsResult = {
+        ...cached,
+        hours: cached.hours ?? null,
+        since: cached.since ?? null,
+        until: cached.until ?? null,
+        insights: cached.insights?.length
+          ? cached.insights
+          : buildInsights(cached.sample, cached.perPlayer, cached.mates),
+      };
+      return normalized;
     }
   }
 
@@ -473,6 +508,7 @@ export async function getSquadStats(
     mates,
     limit,
     gameMode,
+    window,
   });
   await writePersistedSquad(hash, result);
   return result;

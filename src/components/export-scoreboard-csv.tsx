@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {useCallback} from "react";
 import type {PubgRoster} from "@/lib/pubg/types";
@@ -76,7 +76,7 @@ export function ExportScoreboardCsv({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-amber-500/50 hover:text-amber-200"
+      className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-fg-secondary hover:border-accent-border hover:text-accent"
       title={`导出积分板 CSV · ${playedAt}`}
     >
       导出 CSV

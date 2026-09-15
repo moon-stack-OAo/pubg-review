@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import {useRouter} from "next/navigation";
+import {Chip, GameModeChips, cn} from "@/components/ui";
 
 type ModeOption = {
   gameMode: string;
@@ -48,31 +49,28 @@ export function ModeFilter({
 
   return (
     <div className="mb-4 flex flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={() => go("")}
-        className={`rounded-full px-3 py-1 text-sm ${
-          !current
-            ? "bg-amber-500 text-black"
-            : "border border-zinc-700 text-zinc-300"
-        }`}
-      >
+      <Chip as="button" type="button" active={!current} onClick={() => go("")}>
         默认（场次最多）
-      </button>
-      {options.map((m) => (
-        <button
-          key={m.gameMode}
-          type="button"
-          onClick={() => go(m.gameMode)}
-          className={`rounded-full px-3 py-1 text-sm ${
-            current === m.gameMode
-              ? "bg-amber-500 text-black"
-              : "border border-zinc-700 text-zinc-300"
-          }`}
-        >
-          {m.gameMode} · {m.roundsPlayed}
-        </button>
-      ))}
+      </Chip>
+      {options.map((m) => {
+        const selected = current === m.gameMode;
+        return (
+          <button
+            key={m.gameMode}
+            type="button"
+            onClick={() => go(m.gameMode)}
+            title={m.gameMode}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full p-0.5 transition-[box-shadow,background] hover:bg-surface-hover/60",
+              selected &&
+                "bg-accent-muted/40 ring-1 ring-accent/60 ring-offset-1 ring-offset-bg",
+            )}
+          >
+            <GameModeChips gameMode={m.gameMode} size="sm" />
+            <span className="pr-1.5 text-xs text-muted">· {m.roundsPlayed}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

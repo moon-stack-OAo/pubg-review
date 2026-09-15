@@ -1,16 +1,24 @@
 import {
     aggregateMaps,
     aggregateWeaponsFromTelemetry,
+    aggregateWindowKpi,
     buildWeaponsTabData,
     filterByGameMode,
+    filterByPlayedAtWindow,
 } from "@/lib/history/aggregate";
 import {toHistoryRecord} from "@/lib/history/persist";
-import {readPlayerHistory, recordPlayerName, upsertHistoryMatches,} from "@/lib/history/storage";
+import {
+  readNameHistory,
+  readPlayerHistory,
+  recordPlayerName,
+  upsertHistoryMatches,
+} from "@/lib/history/storage";
 import type {
     CompareKpi,
     ComparePlayerSide,
     HistoryMatchRecord,
     MapsTabData,
+    PlayerWindowStats,
     WeaponsTabData,
 } from "@/lib/history/types";
 import {cacheGet, cacheSet} from "@/lib/cache";
@@ -242,6 +250,142 @@ function seasonModeToKpi(
     avgDamage: stats.avgDamage,
     roundsPlayed: stats.roundsPlayed,
     top10Rate: stats.top10Rate,
+  };
+}
+
+export const HOUR_MS = 60 * 60 * 1000;
+export const DEFAULT_WINDOW_HOURS = 24;
+export const MAX_WINDOW_HOURS = 168;
+const MAX_WINDOW_MATCHES = 100;
+
+export type WindowBoundsInput = {
+  hours?: number;
+  since?: string;
+};
+
+export type GetPlayerWindowStatsOptions = WindowBoundsInput & {
+  gameMode?: string;
+  matchLimit?: number;
+};
+
+export function clampWindowHours(raw: number | undefined): number {
+  if (raw == null || !Number.isFinite(raw)) return DEFAULT_WINDOW_HOURS;
+  return Math.min(Math.max(Math.floor(raw), 1), MAX_WINDOW_HOURS);
+}
+
+/** since 优先于 hours；均未传时默认 24h（供个人窗）；squad 自行决定是否启用 */
+export function resolveWindowBounds(options?: WindowBoundsInput): {
+  hours: number;
+  sinceMs: number;
+  untilMs: number;
+} {
+  const untilMs = Date.now();
+  const sinceRaw = options?.since?.trim();
+  if (sinceRaw) {
+    const sinceMs = Date.parse(sinceRaw);
+    if (!Number.isFinite(sinceMs)) {
+      throw new BizError("since 必须是合法 ISO 时间", 400, 40001);
+    }
+    if (sinceMs > untilMs) {
+      throw new BizError("since 不能晚于当前时间", 400, 40001);
+    }
+    const hours = Math.max(
+      1,
+      Math.ceil((untilMs - sinceMs) / HOUR_MS),
+    );
+    return {
+      hours: Math.min(hours, MAX_WINDOW_HOURS),
+      sinceMs,
+      untilMs,
+    };
+  }
+  const hours = clampWindowHours(options?.hours);
+  return {
+    hours,
+    sinceMs: untilMs - hours * HOUR_MS,
+    untilMs,
+  };
+}
+
+/**
+ * 个人时间窗战绩：仅用本地 history，按 playedAt 过滤后聚合 KPI。
+ * 不拉官方、不做 squad。
+ */
+export async function getPlayerWindowStats(
+  platform: PubgPlatform,
+  options: {
+    name?: string;
+    accountId?: string;
+  } & GetPlayerWindowStatsOptions,
+): Promise<PlayerWindowStats> {
+  const name = options.name?.trim() || "";
+  const accountIdOpt = options.accountId?.trim() || "";
+  if (!name && !accountIdOpt) {
+    throw new BizError("name 或 accountId 不能为空", 400, 40001);
+  }
+
+  const { hours, sinceMs, untilMs } = resolveWindowBounds(options);
+  const gameMode = options.gameMode?.trim() || undefined;
+  const matchLimit = Math.min(
+    Math.max(Math.floor(options.matchLimit ?? MAX_WINDOW_MATCHES), 1),
+    MAX_WINDOW_MATCHES,
+  );
+
+  let accountId = accountIdOpt;
+  let resolvedName: string | null = name || null;
+  let resolvedPlatform = platform;
+
+  if (name) {
+    const { value: player } = await getCachedPlayer(platform, name);
+    accountId = player.accountId;
+    resolvedName = player.name;
+    resolvedPlatform = player.platform;
+    if (accountIdOpt && accountIdOpt !== accountId) {
+      throw new BizError("accountId 与昵称不匹配", 400, 40001);
+    }
+  } else {
+    const file = await readPlayerHistory(accountId);
+    if (file) resolvedPlatform = file.platform;
+    const names = await readNameHistory(accountId);
+    resolvedName = names?.names[0]?.name ?? null;
+  }
+
+  const file = await readPlayerHistory(accountId);
+  const historyTotal = file?.matches.length ?? 0;
+  if (!file || historyTotal === 0) {
+    return {
+      accountId,
+      platform: resolvedPlatform,
+      name: resolvedName,
+      hours,
+      since: new Date(sinceMs).toISOString(),
+      until: new Date(untilMs).toISOString(),
+      gameModeFilter: gameMode ?? null,
+      historyTotal: 0,
+      kpi: aggregateWindowKpi([]),
+      matches: [],
+      emptyReason: "no_history",
+    };
+  }
+
+  const modeFiltered = filterByGameMode(file.matches, gameMode);
+  const windowed = filterByPlayedAtWindow(modeFiltered, sinceMs, untilMs).sort(
+    (a, b) => +new Date(b.playedAt) - +new Date(a.playedAt),
+  );
+  const matches = windowed.slice(0, matchLimit);
+
+  return {
+    accountId,
+    platform: file.platform,
+    name: resolvedName,
+    hours,
+    since: new Date(sinceMs).toISOString(),
+    until: new Date(untilMs).toISOString(),
+    gameModeFilter: gameMode ?? null,
+    historyTotal,
+    kpi: aggregateWindowKpi(matches),
+    matches,
+    emptyReason: matches.length === 0 ? "no_matches_in_window" : "ok",
   };
 }
 

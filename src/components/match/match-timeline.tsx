@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
@@ -131,7 +131,7 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-500">
+      <div className="rounded-2xl border border-border bg-surface p-4 text-sm text-muted">
         加载事件轴…
       </div>
     );
@@ -139,7 +139,7 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-rose-900/50 bg-rose-950/20 p-4 text-sm text-rose-200">
+      <div className="rounded-2xl border border-danger/40 bg-danger-muted p-4 text-sm text-danger">
         {error}
       </div>
     );
@@ -148,13 +148,13 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
   if (!data || data.status !== "ready") {
     const msg = statusMessage(data?.status ?? "none", data?.errorMessage ?? null);
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-        <p className="text-sm text-zinc-400">{msg}</p>
+      <div className="rounded-2xl border border-border bg-surface p-4">
+        <p className="text-sm text-fg-secondary">{msg}</p>
         <button
           type="button"
           disabled={parsing || data?.status === "pending"}
           onClick={() => void load({ forceParse: true })}
-          className="mt-3 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm hover:border-amber-500/50 disabled:opacity-50"
+          className="mt-3 rounded-lg border border-border-strong px-3 py-1.5 text-sm hover:border-accent-border disabled:opacity-50"
         >
           {data?.status === "pending" || parsing ? "解析中…" : "触发解析"}
         </button>
@@ -163,10 +163,10 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+    <div className="rounded-2xl border border-border bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">事件轴</h2>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-muted">
           共 {data.events.length} 条 · 时长 {formatDuration(data.durationSec)}
         </span>
       </div>
@@ -178,8 +178,8 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
             onClick={() => setFilter(f.id)}
             className={`rounded-md px-2.5 py-1 text-xs ${
               filter === f.id
-                ? "bg-amber-500/20 text-amber-300"
-                : "bg-zinc-900 text-zinc-400 hover:text-zinc-200"
+                ? "bg-accent-muted text-accent"
+                : "bg-surface-2 text-fg-secondary hover:text-fg"
             }`}
           >
             {f.label}
@@ -187,7 +187,7 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
         ))}
       </div>
       {filtered.length === 0 ? (
-        <p className="text-sm text-zinc-500">当前筛选下无事件。</p>
+        <p className="text-sm text-muted">当前筛选下无事件。</p>
       ) : (
         <ul className="max-h-[28rem] space-y-1 overflow-y-auto text-sm">
           {filtered.map((e, i) => {
@@ -200,15 +200,15 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
                 <Link
                   href={`/match/${matchId}?${q.toString()}`}
                   title="跳转到回放"
-                  className="flex cursor-pointer gap-3 rounded-lg border border-zinc-900/80 bg-zinc-900/30 px-3 py-2 hover:border-amber-500/40 hover:bg-zinc-900/60"
+                  className="flex cursor-pointer gap-3 rounded-lg border border-border/80 bg-surface-2/30 px-3 py-2 hover:border-accent-border hover:bg-surface-2"
                 >
-                  <span className="w-14 shrink-0 font-mono text-xs text-amber-400/90">
+                  <span className="w-14 shrink-0 font-mono text-xs text-accent">
                     {formatDuration(Math.floor(e.t))}
                   </span>
-                  <span className="w-16 shrink-0 text-xs uppercase text-zinc-500">
+                  <span className="w-16 shrink-0 text-xs uppercase text-muted">
                     {e.type}
                   </span>
-                  <span className="text-zinc-300">{describe(e, data.players)}</span>
+                  <span className="text-fg-secondary">{describe(e, data.players)}</span>
                 </Link>
               </li>
             );

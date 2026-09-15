@@ -1,4 +1,5 @@
 import {BizError, fail, ok} from "@/lib/api-response";
+import {clampWindowHours, MAX_WINDOW_HOURS} from "@/lib/history/service";
 import {getSquadStats} from "@/lib/squad/stats";
 import {isPubgPlatform} from "@/lib/pubg/types";
 
@@ -8,6 +9,13 @@ function splitCsv(raw: string | null): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function parseOptionalHours(raw: string | null): number | undefined {
+  if (raw == null || raw.trim() === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return undefined;
+  return clampWindowHours(n);
 }
 
 export async function GET(request: Request) {
@@ -21,6 +29,8 @@ export async function GET(request: Request) {
     );
     const gameMode = searchParams.get("gameMode")?.trim() || undefined;
     const limitRaw = Number(searchParams.get("limit") ?? "20");
+    const hours = parseOptionalHours(searchParams.get("hours"));
+    const since = searchParams.get("since")?.trim() || undefined;
     const refresh =
       searchParams.get("refresh") === "1" ||
       searchParams.get("refresh") === "true";
@@ -34,6 +44,12 @@ export async function GET(request: Request) {
     if (mates.length === 0 && mateIds.length === 0) {
       return fail(new BizError("请至少指定 1 名队友（mates 或 mateIds）"));
     }
+    if (since) {
+      const sinceMs = Date.parse(since);
+      if (!Number.isFinite(sinceMs)) {
+        return fail(new BizError("since 必须是合法 ISO 时间"));
+      }
+    }
 
     const data = await getSquadStats({
       platform,
@@ -42,10 +58,17 @@ export async function GET(request: Request) {
       mateAccountIds: mateIds,
       limit: Number.isFinite(limitRaw) ? limitRaw : 20,
       gameMode,
+      hours,
+      since,
       refresh,
     });
 
-    return ok(data);
+    return ok(data, {
+      hours: data.hours,
+      fullSquad: data.sample.fullSquad,
+      scanned: data.sample.scanned,
+      maxWindowHours: MAX_WINDOW_HOURS,
+    });
   } catch (error) {
     return fail(error);
   }

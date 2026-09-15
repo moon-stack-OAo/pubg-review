@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import type {ComparePlayerSide, MapAggRow, WeaponsTabData,} from "@/lib/history/types";
 import type {FormStatusCode, FormStatusResult,} from "@/lib/analysis/form-status";
 import type {WeaknessTagSummary} from "@/lib/analysis/player-analysis-core";
@@ -6,9 +6,9 @@ import {formatNumber, formatPercent} from "@/lib/format";
 import {CompareForm} from "@/components/compare-form";
 
 const FORM_CHIP_TONE: Record<FormStatusCode, string> = {
-  normal: "border-emerald-700/50 bg-emerald-900/40 text-emerald-200",
-  soft: "border-amber-700/50 bg-amber-900/40 text-amber-200",
-  poor: "border-rose-700/50 bg-rose-900/40 text-rose-200",
+  normal: "border-success/40 bg-success-muted text-success",
+  soft: "border-warning/40 bg-warning-muted text-warning",
+  poor: "border-danger/40 bg-danger-muted text-danger",
 };
 
 export type PlayerTabId =
@@ -31,6 +31,7 @@ export function buildPlayerHref(
     vs?: string;
     mates?: string;
     limit?: string;
+    hours?: string;
     sort?: string;
     page?: string | number;
   },
@@ -44,6 +45,7 @@ export function buildPlayerHref(
   if (opts.vs) q.set("vs", opts.vs);
   if (opts.mates) q.set("mates", opts.mates);
   if (opts.limit) q.set("limit", opts.limit);
+  if (opts.hours) q.set("hours", opts.hours);
   if (opts.sort && opts.sort !== "time") q.set("sort", opts.sort);
   const pageNum =
     opts.page == null || opts.page === ""
@@ -79,6 +81,7 @@ export function PlayerTabNav({
   vs,
   mates,
   limit,
+  hours,
 }: {
   platform: string;
   name: string;
@@ -89,6 +92,7 @@ export function PlayerTabNav({
   vs?: string;
   mates?: string;
   limit?: string;
+  hours?: string;
 }) {
   const items: { id: PlayerTabId; label: string }[] = [
     { id: "overview", label: "概览" },
@@ -100,7 +104,7 @@ export function PlayerTabNav({
   ];
 
   return (
-    <div className="flex flex-wrap gap-1 border-b border-zinc-800">
+    <div className="flex flex-wrap gap-1 border-b border-border">
       {items.map((item) => {
         const active = tab === item.id;
         return (
@@ -114,12 +118,13 @@ export function PlayerTabNav({
               vs: item.id === "compare" ? vs : undefined,
               mates: item.id === "squad" ? mates : undefined,
               limit: item.id === "squad" ? limit : undefined,
+              hours: item.id === "squad" ? hours : undefined,
             })}
             aria-current={active ? "page" : undefined}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               active
-                ? "border-amber-500 text-amber-300"
-                : "border-transparent text-zinc-500 hover:text-zinc-300"
+                ? "border-accent text-fg"
+                : "border-transparent text-muted hover:text-fg"
             }`}
           >
             {item.label}
@@ -133,7 +138,7 @@ export function PlayerTabNav({
 function Bar({
   value,
   max,
-  color = "bg-amber-500",
+  color = "bg-accent",
 }: {
   value: number;
   max: number;
@@ -141,7 +146,7 @@ function Bar({
 }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-hover">
       <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
     </div>
   );
@@ -167,14 +172,14 @@ export function WeaponsTabPanel({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-fg-secondary">
         遥测解析进度：{data.parsedCount} / {data.sampleSize}
       </p>
-      <p className="text-sm text-zinc-500">{data.note}</p>
+      <p className="text-sm text-muted">{data.note}</p>
 
       {data.sampleSize === 0 && overviewHref ? (
-        <p className="text-sm text-zinc-400">
-          <Link href={overviewHref} className="text-amber-400 hover:underline">
+        <p className="text-sm text-fg-secondary">
+          <Link href={overviewHref} className="text-rank-1 hover:underline">
             前往概览同步近况
           </Link>
           ，写入本地历史后再查看武器统计。
@@ -182,11 +187,11 @@ export function WeaponsTabPanel({
       ) : null}
 
       {data.sampleSize > 0 && data.parsedCount === 0 ? (
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-fg-secondary">
           {overviewHref ? (
             <>
               可先到{" "}
-              <Link href={overviewHref} className="text-amber-400 hover:underline">
+              <Link href={overviewHref} className="text-rank-1 hover:underline">
                 概览
               </Link>
               打开近期对局的事件轴/回放以触发自动解析，然后再回本 Tab。
@@ -212,7 +217,7 @@ export function WeaponsTabPanel({
           value={formatPercent(data.combat.headshotRate)}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3 text-sm text-zinc-400 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 text-sm text-fg-secondary md:grid-cols-4">
         <span>总击杀 {data.combat.kills}</span>
         <span>总助攻 {data.combat.assists}</span>
         <span>总伤害 {formatNumber(data.combat.damage, 0)}</span>
@@ -220,13 +225,13 @@ export function WeaponsTabPanel({
       </div>
 
       {data.weapons.length === 0 ? (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted">
           暂无按武器明细。可在对局详情触发 telemetry 解析后再回来查看。
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="text-zinc-500">
+            <thead className="text-muted">
               <tr>
                 <th className="px-2 py-2 font-medium">武器</th>
                 <th className="px-2 py-2 font-medium">击杀</th>
@@ -238,9 +243,9 @@ export function WeaponsTabPanel({
               {data.weapons.map((w) => (
                 <tr
                   key={w.weaponId}
-                  className="border-t border-zinc-800/80"
+                  className="border-t border-border"
                 >
-                  <td className="px-2 py-2 text-zinc-200">{w.label}</td>
+                  <td className="px-2 py-2 text-fg">{w.label}</td>
                   <td className="px-2 py-2">{w.kills}</td>
                   <td className="px-2 py-2">{w.knocks}</td>
                   <td className="px-2 py-2">
@@ -275,19 +280,19 @@ export function MapsTabPanel({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-muted">
         基于本地历史库近 {sampleSize} 场
         {gameModeFilter ? ` · 模式 ${gameModeFilter}` : " · 全部模式"}
         。KD≈ 为近似值，非官方赛季 KD。
       </p>
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted">
           历史库暂无数据。打开概览或点击「同步近况」写入对局。
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="text-zinc-500">
+            <thead className="text-muted">
               <tr>
                 <th className="px-2 py-2 font-medium">地图</th>
                 <th className="px-2 py-2 font-medium">场次</th>
@@ -309,12 +314,12 @@ export function MapsTabPanel({
                       })
                     : null;
                 return (
-                  <tr key={r.mapName} className="border-t border-zinc-800/80">
-                    <td className="px-2 py-2 text-zinc-200">
+                  <tr key={r.mapName} className="border-t border-border">
+                    <td className="px-2 py-2 text-fg">
                       {href ? (
                         <Link
                           href={href}
-                          className="text-amber-300 hover:underline"
+                          className="text-accent hover:underline"
                         >
                           {r.mapLabel}
                         </Link>
@@ -337,7 +342,7 @@ export function MapsTabPanel({
                       <Bar
                         value={r.matches}
                         max={maxMatches}
-                        color="bg-emerald-500/80"
+                        color="bg-success"
                       />
                     </td>
                   </tr>
@@ -386,14 +391,14 @@ const COMPARE_METRICS: {
 
 function ReadonlyWeaknessPills({ tags }: { tags: WeaknessTagSummary[] }) {
   if (tags.length === 0) {
-    return <p className="text-xs text-zinc-500">暂无明显弱点</p>;
+    return <p className="text-xs text-muted">暂无明显弱点</p>;
   }
   return (
     <div className="flex flex-wrap gap-1.5">
       {tags.map((t) => (
         <span
           key={t.code}
-          className="rounded-full border border-zinc-700 bg-zinc-900/60 px-2.5 py-0.5 text-xs text-zinc-300"
+          className="rounded-full border border-border-strong bg-surface-2 px-2.5 py-0.5 text-xs text-fg-secondary"
         >
           {t.label}
           <span className="ml-1 opacity-70">×{t.count}</span>
@@ -415,10 +420,10 @@ function CompareSideFormBlock({
   formUnavailable?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
-      <p className="mb-2 truncate text-xs text-zinc-500">{sideName}</p>
+    <div className="rounded-lg border border-border bg-surface-2 p-3">
+      <p className="mb-2 truncate text-xs text-muted">{sideName}</p>
       {formUnavailable || !form ? (
-        <p className="text-sm text-zinc-500">近况暂不可用</p>
+        <p className="text-sm text-muted">近况暂不可用</p>
       ) : (
         <span
           className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${FORM_CHIP_TONE[form.status]}`}
@@ -427,7 +432,7 @@ function CompareSideFormBlock({
         </span>
       )}
       <div className="mt-2">
-        <p className="mb-1 text-xs text-zinc-500">弱点</p>
+        <p className="mb-1 text-xs text-muted">弱点</p>
         <ReadonlyWeaknessPills tags={weakness} />
       </div>
     </div>
@@ -483,7 +488,7 @@ export function CompareTabPanel({
         seasonId={seasonId}
         otherName={vs}
       />
-      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
       {left && right ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -502,7 +507,7 @@ export function CompareTabPanel({
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="text-zinc-500">
+              <thead className="text-muted">
                 <tr>
                   <th className="px-2 py-2 font-medium">指标</th>
                   <th className="px-2 py-2 font-medium">{left.name}</th>
@@ -516,20 +521,20 @@ export function CompareTabPanel({
                   const rv = right.kpi[m.key];
                   const max = maxByKey[m.key] ?? 1;
                   return (
-                    <tr key={m.key} className="border-t border-zinc-800/80">
-                      <td className="px-2 py-3 text-zinc-400">{m.label}</td>
-                      <td className="px-2 py-3 font-medium text-zinc-200">
+                    <tr key={m.key} className="border-t border-border">
+                      <td className="px-2 py-3 text-fg-secondary">{m.label}</td>
+                      <td className="px-2 py-3 font-medium text-fg">
                         {m.format(lv as number | null)}
                         <div className="mt-1">
                           <Bar
                             value={Number(lv ?? 0)}
                             max={max}
-                            color="bg-amber-500/80"
+                            color="bg-accent/80"
                           />
                         </div>
                       </td>
-                      <td className="px-2 py-3 text-center text-zinc-600">vs</td>
-                      <td className="px-2 py-3 font-medium text-zinc-200">
+                      <td className="px-2 py-3 text-center text-muted">vs</td>
+                      <td className="px-2 py-3 font-medium text-fg">
                         {m.format(rv as number | null)}
                         <div className="mt-1">
                           <Bar
@@ -544,7 +549,7 @@ export function CompareTabPanel({
                 })}
               </tbody>
             </table>
-            <p className="mt-3 text-xs text-zinc-600">
+            <p className="mt-3 text-xs text-muted">
               模式：{left.gameMode ?? "-"} / {right.gameMode ?? "-"} ·
               数据来自赛季统计（非历史库场次聚合）
             </p>
@@ -552,7 +557,7 @@ export function CompareTabPanel({
         </>
       ) : (
         !error && (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             输入另一位同平台玩家昵称开始对比（最多 2 人）。
           </p>
         )
@@ -563,9 +568,9 @@ export function CompareTabPanel({
 
 function MiniKpi({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
-      <div className="text-xs text-zinc-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-zinc-100">{value}</div>
+    <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+      <div className="text-xs text-muted">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-fg">{value}</div>
     </div>
   );
 }

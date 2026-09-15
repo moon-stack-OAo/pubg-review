@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {useMemo, useState, useSyncExternalStore} from "react";
 import {useRouter} from "next/navigation";
@@ -92,31 +92,31 @@ export function CompareForm({
   return (
     <div className="space-y-3">
       <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-sm text-zinc-400">
+        <label className="flex flex-col gap-1 text-sm text-fg-secondary">
           <span>对比玩家昵称（同平台）</span>
           <input
             value={peer}
             onChange={(e) => setPeer(e.target.value)}
             placeholder="输入另一个昵称"
-            className="min-w-[12rem] rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200"
+            className="min-w-[12rem] rounded-lg border border-border-strong bg-surface-2 px-3 py-2 text-fg"
           />
         </label>
         <button
           type="submit"
-          className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-black hover:bg-amber-400"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:brightness-110"
         >
           对比
         </button>
       </form>
       {chips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-zinc-500">快捷：</span>
+          <span className="text-muted">快捷：</span>
           {chips.map((n) => (
             <button
               key={n.toLowerCase()}
               type="button"
               onClick={() => pushCompare(n)}
-              className="rounded-full border border-zinc-700 bg-zinc-900/60 px-3 py-1 text-zinc-300 transition-colors hover:border-amber-500/40 hover:text-amber-200"
+              className="rounded-full border border-border-strong bg-surface-2 px-3 py-1 text-fg-secondary transition-colors hover:border-accent-border hover:text-accent"
             >
               {n}
             </button>

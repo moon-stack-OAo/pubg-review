@@ -1,8 +1,9 @@
 "use client";
 
 import {useCallback, useSyncExternalStore} from "react";
-import {isFavorite, subscribeFavorites, toggleFavorite,} from "@/lib/favorites";
+import {isFavorite, subscribeFavorites, toggleFavorite} from "@/lib/favorites";
 import type {PubgPlatform} from "@/lib/pubg/types";
+import {buttonClass} from "@/components/ui";
 
 const FAVORITE_SERVER_SNAPSHOT = false;
 
@@ -29,14 +30,10 @@ export function FavoriteButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-        favorited
-          ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
-          : "border-zinc-700 text-zinc-300 hover:border-zinc-500"
-      }`}
+      className={buttonClass(favorited ? "soft" : "secondary", "md")}
       aria-pressed={favorited}
     >
-      {favorited ? "已收藏" : "收藏"}
+      {favorited ? "★ 已收藏" : "☆ 收藏"}
     </button>
   );
 }

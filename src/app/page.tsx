@@ -1,40 +1,94 @@
 import Link from "next/link";
 import {SearchForm} from "@/components/search-form";
-import {Card, PageShell} from "@/components/ui";
+import {AppTopbar, buttonClass, cn} from "@/components/ui";
+
+const FEATURES = [
+  {
+    title: "赛季概览",
+    desc: "KD、胜率、Top10 与样本量一眼扫完，趋势对比帮你判断是状态波动还是系统性短板。",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+        <path d="M2 12V6h4v6M7 12V3h4v9M12 12V8h2v4" />
+      </svg>
+    ),
+  },
+  {
+    title: "对局复盘",
+    desc: "每场附可解释标签：为什么死、哪里失分。弱点写成可执行结论，而不是空泛评分。",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+        <path d="M3 3h10v10H3z" />
+        <path d="M5 8h6M5 11h4" />
+      </svg>
+    ),
+  },
+  {
+    title: "2D 回放",
+    desc: "路径、交火与圈压时间轴对齐，适合小队复盘配合失误与位移决策。",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M6.5 5.5l5 2.5-5 2.5z" />
+      </svg>
+    ),
+  },
+] as const;
 
 export default function HomePage() {
   return (
-    <PageShell>
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-zinc-500">PUBG Review · M2</p>
-          <Link
-            href="/favorites"
-            className="text-sm text-zinc-500 hover:text-amber-300"
-          >
+    <div className="flex min-h-full flex-col">
+      <AppTopbar
+        right={
+          <Link href="/favorites" className={buttonClass("secondary", "sm")}>
             收藏玩家
           </Link>
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight">对局复盘分析台</h1>
-        <p className="text-zinc-400">查战绩，更要看懂每一场为什么输赢。</p>
-      </header>
+        }
+      />
 
-      <Card>
-        <SearchForm />
-      </Card>
+      <main className="flex flex-1 flex-col items-center px-6 pb-12 pt-10 md:pt-12">
+        <section className="mb-8 flex w-full max-w-[44rem] flex-col items-center gap-4 text-center">
+          <p className="text-xs font-medium uppercase tracking-[var(--tracking-label)] text-muted">
+            Self-hosted · Match Review
+          </p>
+          <h1 className="m-0 text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-tight tracking-tight">
+            PUBG 复盘分析台
+          </h1>
+          <p className="m-0 w-full text-base text-fg-secondary">
+            查战绩，更要看懂每一场为什么输赢 —— 输入昵称，定位弱点，拿到可执行改进建议。
+          </p>
+        </section>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {[
-          ["赛季概览", "KPI + 弱点标签，可按标签过滤对局"],
-          ["分析 Tab", "雷达粗分 + 主要问题与建议聚合"],
-          ["复盘报告", "无遥测初判标签与可执行建议"],
-        ].map(([title, desc]) => (
-          <Card key={title}>
-            <h2 className="font-medium text-zinc-100">{title}</h2>
-            <p className="mt-1 text-sm text-zinc-500">{desc}</p>
-          </Card>
-        ))}
-      </div>
-    </PageShell>
+        <section
+          className={cn(
+            "flex w-full max-w-[44rem] flex-col gap-4 rounded-[var(--radius-xl)] border border-border",
+            "bg-surface p-5 shadow-[var(--shadow-md)]",
+          )}
+        >
+          <SearchForm />
+        </section>
+
+        <section
+          className="mt-10 grid w-full max-w-[56rem] gap-4 md:grid-cols-3"
+          aria-label="产品卖点"
+        >
+          {FEATURES.map((f) => (
+            <article
+              key={f.title}
+              className="flex min-h-full flex-col gap-3 rounded-lg border border-border bg-surface p-5 shadow-[var(--shadow-sm)]"
+            >
+              <div className="grid h-8 w-8 place-items-center rounded-md border border-accent-border bg-accent-muted text-accent [&_svg]:h-4 [&_svg]:w-4">
+                {f.icon}
+              </div>
+              <h2 className="m-0 text-base font-semibold">{f.title}</h2>
+              <p className="m-0 text-sm leading-snug text-fg-secondary">{f.desc}</p>
+            </article>
+          ))}
+        </section>
+
+        <p className="mt-10 text-center text-xs text-muted">
+          数据来自 PUBG 官方 API · 仅用于个人查询与复盘分析
+        </p>
+      </main>
+    </div>
   );
 }

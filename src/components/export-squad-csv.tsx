@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {useCallback} from "react";
 import type {SquadMatchRow, SquadMemberStats} from "@/lib/squad/types";
@@ -123,7 +123,7 @@ export function ExportSquadCsv({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-amber-500/50 hover:text-amber-200"
+      className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-fg-secondary hover:border-accent-border hover:text-accent"
       title="导出齐全对局明细 CSV（含人均汇总）"
     >
       导出 CSV
