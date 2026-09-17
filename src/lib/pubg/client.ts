@@ -39,12 +39,51 @@ export class PubgApiError extends Error {
   }
 }
 
-function getApiKey(): string {
-  const key = process.env.PUBG_API_KEY?.trim();
-  if (!key) {
-    throw new PubgApiError("未配置 PUBG_API_KEY，请在 .env.local 中设置", 500);
+/** 多 Key：`PUBG_API_KEYS` 支持 JSON 数组或逗号分隔，并合并 `PUBG_API_KEY`；去重保序 */
+function parseApiKeys(): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const add = (key: string) => {
+    const trimmed = key.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    keys.push(trimmed);
+  };
+  const pushRaw = (raw: string | undefined) => {
+    if (!raw) return;
+    const text = raw.trim();
+    if (!text) return;
+    if (text.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            if (typeof item === "string") add(item);
+          }
+          return;
+        }
+      } catch {
+        /* 非合法 JSON 时回退分隔符解析 */
+      }
+    }
+    for (const part of text.split(/[,;\s]+/)) add(part);
+  };
+  pushRaw(process.env.PUBG_API_KEYS);
+  pushRaw(process.env.PUBG_API_KEY);
+  return keys;
+}
+
+let apiKeyCursor = 0;
+
+function getApiKeys(): string[] {
+  const keys = parseApiKeys();
+  if (keys.length === 0) {
+    throw new PubgApiError(
+      "未配置 PUBG_API_KEY / PUBG_API_KEYS，请在 .env.local 中设置",
+      500,
+    );
   }
-  return key;
+  return keys;
 }
 
 function platformToShard(platform: PubgPlatform): string {
@@ -69,28 +108,20 @@ function extractPlatformFromPath(path: string): string | undefined {
   return m?.[1];
 }
 
-async function pubgFetch<T extends JsonApiResponse>(
-  path: string,
+async function pubgFetchOnce<T extends JsonApiResponse>(
+  url: string,
+  logPath: string,
+  platform: string | undefined,
+  apiKey: string,
   init?: RequestInit,
 ): Promise<T> {
-  const url = path.startsWith("http") ? path : `${PUBG_API_BASE}${path}`;
-  const logPath = path.startsWith("http")
-    ? (() => {
-        try {
-          return new URL(path).pathname;
-        } catch {
-          return "/external";
-        }
-      })()
-    : path.split("?")[0] || path;
-  const platform = extractPlatformFromPath(path);
   const started = Date.now();
 
   try {
     const response = await fetch(url, {
       ...init,
       headers: {
-        Authorization: `Bearer ${getApiKey()}`,
+        Authorization: `Bearer ${apiKey}`,
         Accept: "application/vnd.api+json",
         "Accept-Encoding": "gzip",
         ...(init?.headers ?? {}),
@@ -168,6 +199,48 @@ async function pubgFetch<T extends JsonApiResponse>(
     });
     throw error;
   }
+}
+
+async function pubgFetch<T extends JsonApiResponse>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const url = path.startsWith("http") ? path : `${PUBG_API_BASE}${path}`;
+  const logPath = path.startsWith("http")
+    ? (() => {
+        try {
+          return new URL(path).pathname;
+        } catch {
+          return "/external";
+        }
+      })()
+    : path.split("?")[0] || path;
+  const platform = extractPlatformFromPath(path);
+  const keys = getApiKeys();
+  const start = apiKeyCursor % keys.length;
+  let lastRateLimit: PubgApiError | null = null;
+
+  for (let i = 0; i < keys.length; i++) {
+    const index = (start + i) % keys.length;
+    const key = keys[index];
+    try {
+      const body = await pubgFetchOnce<T>(url, logPath, platform, key, init);
+      apiKeyCursor = (index + 1) % keys.length;
+      return body;
+    } catch (error) {
+      if (error instanceof PubgApiError && error.status === 429) {
+        lastRateLimit = error;
+        apiKeyCursor = (index + 1) % keys.length;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw (
+    lastRateLimit ??
+    new PubgApiError("PUBG API 限流（429）", 429, 60)
+  );
 }
 
 function extractMatchIds(player: JsonApiResource): string[] {

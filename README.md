@@ -14,14 +14,15 @@ PUBG 对局复盘与个人战绩分析台（自托管、单实例）。
 cp .env.example .env.local
 ```
 
-| 变量                        | 必填         | 说明                                                        |
-|---------------------------|------------|-----------------------------------------------------------|
-| `PUBG_API_KEY`            | 是          | [developer.pubg.com](https://developer.pubg.com/) 申请；仅服务端 |
-| `RATE_LIMIT_RPM`          | 否          | BFF 每 IP 读限流，默认 `30`                                      |
-| `RATE_LIMIT_MUTATION_RPM` | 否          | 写/强制刷新更严限流，默认约为读限流的 1/3                                   |
-| `TRUST_PROXY`             | 否          | 是否信任 `X-Forwarded-For`，默认 `false`                         |
-| `MCP_ENABLED`             | 否          | Remote MCP 开关，默认关闭                                        |
-| `MCP_TOKEN`               | 开启 MCP 时必填 | Bearer Token                                              |
+| 变量                        | 必填         | 说明                                                                        |
+|---------------------------|------------|---------------------------------------------------------------------------|
+| `PUBG_API_KEY`            | 是*         | [developer.pubg.com](https://developer.pubg.com/) 申请；仅服务端；与下方多 Key 二选一或合并 |
+| `PUBG_API_KEYS`           | 否          | 多个 Key（逗号分隔或 JSON 数组）；轮询，遇 429 换下一个                                       |
+| `RATE_LIMIT_RPM`          | 否          | BFF 每 IP 读限流，默认 `30`                                                      |
+| `RATE_LIMIT_MUTATION_RPM` | 否          | 写/强制刷新更严限流，默认约为读限流的 1/3                                                   |
+| `TRUST_PROXY`             | 否          | 是否信任 `X-Forwarded-For`，默认 `false`                                         |
+| `MCP_ENABLED`             | 否          | Remote MCP 开关，默认关闭                                                        |
+| `MCP_TOKEN`               | 开启 MCP 时必填 | Bearer Token                                                              |
 
 > 真实 Key / Token 不要提交 Git，也不要写进前端代码。
 

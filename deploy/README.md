@@ -30,6 +30,8 @@ mkdir -p .data
 # A. 项目根目录 .env.production（勿提交 Git）
 cat > .env.production <<'EOF'
 PUBG_API_KEY=你的密钥
+# 多个 Key（可选）：逗号分隔，轮询；遇 429 自动换下一个
+# PUBG_API_KEYS=key1,key2,key3
 RATE_LIMIT_RPM=30
 # Remote MCP 默认关闭；需要时开启并配置 Token：
 # MCP_ENABLED=true
