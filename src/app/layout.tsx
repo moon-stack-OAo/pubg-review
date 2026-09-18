@@ -1,5 +1,6 @@
 import type {Metadata} from "next";
 import {IBM_Plex_Mono, IBM_Plex_Sans, Noto_Sans_SC} from "next/font/google";
+import {AppShell} from "@/components/app-shell";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -34,8 +35,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="zh-CN"
       className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} ${notoSansSc.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-bg font-sans text-fg">
-        {children}
+      <body className="min-h-full bg-bg font-sans text-fg">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

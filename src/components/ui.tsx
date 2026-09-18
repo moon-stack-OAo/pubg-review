@@ -22,7 +22,19 @@ export function PageShell({
     >
       {children}
       <footer className="mt-auto border-t border-border pt-4 text-center text-xs text-muted">
-        数据来自 PUBG 官方 API · 仅用于个人查询与复盘分析
+        数据来自 PUBG 官方 API · 地图资源来自{" "}
+        <a
+          href="https://github.com/pubg/api-assets"
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent hover:underline"
+        >
+          PUBG API Assets
+        </a>
+        {" · "}
+        <Link href="/maps" className="text-accent hover:underline">
+          地图中心
+        </Link>
       </footer>
     </main>
   );
@@ -38,26 +50,18 @@ export function AppTopbar({
   right?: ReactNode;
 }) {
   return (
-    <header className="flex h-[var(--header-height)] items-center justify-between border-b border-border bg-bg-elevated px-4 md:px-6">
+    <header className="flex min-h-[var(--header-height)] items-center justify-between gap-3 border-b border-border bg-bg-elevated px-4 py-2 md:px-6">
       <div className="flex min-w-0 items-center gap-3">
-        <Link href="/" className="flex shrink-0 items-center gap-3">
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-accent to-[oklch(62%_0.12_250)] font-mono text-[11px] font-semibold text-accent-fg">
-            PR
-          </span>
-          <span>
-            <span className="block text-sm font-semibold tracking-tight">
-              PUBG Review
-            </span>
-            <span className="block text-xs text-muted">{subtitle}</span>
-          </span>
-        </Link>
+        <p className="truncate text-xs font-medium text-muted">{subtitle}</p>
         {leftExtra ? (
-          <div className="hidden min-w-0 items-center gap-2 sm:flex">
+          <div className="hidden min-w-0 items-center gap-2 border-l border-border pl-3 sm:flex">
             {leftExtra}
           </div>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2">{right}</div>
+      {right ? (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{right}</div>
+      ) : null}
     </header>
   );
 }
@@ -72,7 +76,7 @@ export function Card({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)] md:p-5",
+        "rounded-lg border border-border bg-surface p-4 shadow-[var(--shadow-sm)] md:p-5",
         className,
       )}
     >

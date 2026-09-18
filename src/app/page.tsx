@@ -1,6 +1,5 @@
-import Link from "next/link";
 import {SearchForm} from "@/components/search-form";
-import {AppTopbar, buttonClass, cn} from "@/components/ui";
+import {AppTopbar, cn} from "@/components/ui";
 
 const FEATURES = [
   {
@@ -37,13 +36,7 @@ const FEATURES = [
 export default function HomePage() {
   return (
     <div className="flex min-h-full flex-col">
-      <AppTopbar
-        right={
-          <Link href="/favorites" className={buttonClass("secondary", "sm")}>
-            收藏玩家
-          </Link>
-        }
-      />
+      <AppTopbar />
 
       <main className="flex flex-1 flex-col items-center px-6 pb-12 pt-10 md:pt-12">
         <section className="mb-8 flex w-full max-w-[44rem] flex-col items-center gap-4 text-center">
@@ -60,7 +53,7 @@ export default function HomePage() {
 
         <section
           className={cn(
-            "flex w-full max-w-[44rem] flex-col gap-4 rounded-[var(--radius-xl)] border border-border",
+            "flex w-full max-w-[44rem] flex-col gap-4 rounded-lg border border-border",
             "bg-surface p-5 shadow-[var(--shadow-md)]",
           )}
         >

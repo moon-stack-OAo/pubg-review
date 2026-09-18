@@ -185,14 +185,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
         <AppTopbar
           subtitle="玩家页"
           right={
-            <>
-              <Link href="/" className={buttonClass("ghost", "sm")}>
-                首页
-              </Link>
-              <Link href="/favorites" className={buttonClass("secondary", "sm")}>
-                收藏夹
-              </Link>
-            </>
+            <Link href="/" className={buttonClass("ghost", "sm")}>
+              返回查询
+            </Link>
           }
         />
         <PageShell>
@@ -464,19 +459,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <AppTopbar
-        subtitle={`/player/${platform}/${name}`}
-        right={
-          <>
-            <Link href="/" className={buttonClass("ghost", "sm")}>
-              首页
-            </Link>
-            <Link href="/favorites" className={buttonClass("secondary", "sm")}>
-              收藏夹
-            </Link>
-          </>
-        }
-      />
+      <AppTopbar subtitle={`/player/${platform}/${name}`} />
       <PageShell>
       <section className="space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">

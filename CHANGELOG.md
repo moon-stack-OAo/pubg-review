@@ -39,6 +39,8 @@
 
 ### Changed
 
+- 收藏页「同步近况」结果提示改为单独一行，不再挤在操作按钮列
+- 移除未再引用的 `SyncHistoryButton` / `RefreshButton`（已由 `PlayerHeadActions` 承接）
 - Remote MCP **默认关闭**；未显式开启时 `/mcp` 返回 404
 - `npm start` 固定监听 `0.0.0.0:3000`
 - README 重写：按「快速开始 / 功能 / 路由 / 部署 / MCP / API / 数据与缓存 / 限流」重组，去掉半成品 backlog 口吻

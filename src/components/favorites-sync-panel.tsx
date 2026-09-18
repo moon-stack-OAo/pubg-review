@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import {useRef, useState} from "react";
+import {Fragment, useRef, useState} from "react";
 import {Card} from "@/components/ui";
 import type {FavoritePlayer} from "@/lib/favorites";
 import {formatDateTime} from "@/lib/format";
@@ -212,26 +212,34 @@ export function FavoritesSyncPanel({
                 const running = status === "running";
                 const hint = hints[key];
                 const disabled = batchRunning || running;
+                const hintClass =
+                  status === "failed"
+                    ? "text-danger"
+                    : status === "skipped"
+                      ? "text-warning"
+                      : status === "ok"
+                        ? "text-success"
+                        : "text-muted";
                 return (
-                  <tr key={key} className="border-t border-border">
-                    <td className="px-2 py-2">
-                      <Link
-                        href={`/player/${item.platform}/${encodeURIComponent(item.name)}`}
-                        className="text-accent hover:underline"
-                      >
-                        {item.name}
-                      </Link>
-                      <div className="mt-0.5 text-xs text-muted">
-                        {item.accountId}
-                      </div>
-                    </td>
-                    <td className="px-2 py-2">{item.platform}</td>
-                    <td className="px-2 py-2 text-fg-secondary">
-                      {formatDateTime(item.savedAt)}
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex flex-wrap items-start gap-2">
-                        <div className="flex flex-col items-start gap-1">
+                  <Fragment key={key}>
+                    <tr className="border-t border-border">
+                      <td className="px-2 py-2">
+                        <Link
+                          href={`/player/${item.platform}/${encodeURIComponent(item.name)}`}
+                          className="text-accent hover:underline"
+                        >
+                          {item.name}
+                        </Link>
+                        <div className="mt-0.5 text-xs text-muted">
+                          {item.accountId}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">{item.platform}</td>
+                      <td className="px-2 py-2 text-fg-secondary">
+                        {formatDateTime(item.savedAt)}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => void onSyncOne(item)}
@@ -241,22 +249,27 @@ export function FavoritesSyncPanel({
                           >
                             {running ? "同步中…" : "同步近况"}
                           </button>
-                          {hint ? (
-                            <span className="max-w-[12rem] text-xs text-muted">
-                              {hint}
-                            </span>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => onRemove(item)}
+                            className="rounded-md border border-border-strong px-2 py-1 text-xs text-fg-secondary hover:border-danger/40 hover:text-danger"
+                          >
+                            取消收藏
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onRemove(item)}
-                          className="rounded-md border border-border-strong px-2 py-1 text-xs text-fg-secondary hover:border-danger/40 hover:text-danger"
+                      </td>
+                    </tr>
+                    {hint ? (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className={`px-2 pb-2.5 pt-0 text-xs leading-snug ${hintClass}`}
                         >
-                          取消收藏
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                          {hint}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>

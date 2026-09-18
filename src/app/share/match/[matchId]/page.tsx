@@ -166,9 +166,6 @@ export default async function ShareMatchPage({
             >
               完整报告
             </Link>
-            <Link href="/" className={buttonClass("ghost", "sm")}>
-              首页
-            </Link>
           </>
         }
       />
@@ -181,7 +178,7 @@ export default async function ShareMatchPage({
         {error && <ErrorBox message={error} />}
 
         {match && (
-          <article className="overflow-hidden rounded-xl border border-accent-border bg-gradient-to-b from-surface via-bg to-bg shadow-[var(--shadow-md)]">
+          <article className="overflow-hidden rounded-lg border border-accent-border bg-gradient-to-b from-surface via-bg to-bg shadow-[var(--shadow-md)]">
             <div className="border-b border-accent-border bg-accent-muted px-5 py-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -200,7 +197,7 @@ export default async function ShareMatchPage({
                 </div>
                 {focus?.winPlace != null && (
                   <div
-                    className={`rounded-xl border border-border-strong bg-bg px-3 py-2 text-center ${rankClass(focus.winPlace)}`}
+                    className={`rounded-lg border border-border-strong bg-bg px-3 py-2 text-center ${rankClass(focus.winPlace)}`}
                   >
                     <div className="text-[10px] uppercase text-muted">
                       排名

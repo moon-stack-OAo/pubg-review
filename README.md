@@ -64,6 +64,8 @@ npm run lint
 | `/match/{matchId}`          | `tab=report\|scoreboard\|timeline\|replay\|weapons`；回放可用 `t=` 秒定位                                                             |
 | `/share/match/{matchId}`    | 只读分享；无 `accountId` 时仅基础对局信息                                                                                                   |
 | `/favorites`                | 本机收藏；可串行同步近况入库                                                                                                                |
+| `/maps`                     | 独立地图中心；官方 Low Res 底图、遥测尺寸与 API 标识                                                                                           |
+| `/maps/{mapId}`             | 单地图资料页；当前不含玩家战绩和对局复盘                                                                                                         |
 
 平台：`steam` / `kakao` / `xbox` / `psn`。昵称大小写须与游戏内一致。
 

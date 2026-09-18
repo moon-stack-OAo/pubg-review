@@ -1,9 +1,8 @@
 ﻿"use client";
 
-import Link from "next/link";
 import {useCallback, useSyncExternalStore} from "react";
 import {FavoritesSyncPanel} from "@/components/favorites-sync-panel";
-import {AppTopbar, Card, PageShell, buttonClass} from "@/components/ui";
+import {AppTopbar, Card, PageShell} from "@/components/ui";
 import {
   type FavoritePlayer,
   getFavoritesServerSnapshot,
@@ -39,13 +38,7 @@ export default function FavoritesPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <AppTopbar
-        right={
-          <Link href="/" className={buttonClass("ghost", "sm")}>
-            返回搜索
-          </Link>
-        }
-      />
+      <AppTopbar subtitle="收藏玩家" />
       <PageShell>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

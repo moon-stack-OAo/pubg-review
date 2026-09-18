@@ -44,7 +44,7 @@ export function MatchScoreboard({
         {visible.map((roster) => (
           <div
             key={roster.id}
-            className="overflow-x-auto rounded-xl border border-border"
+            className="overflow-x-auto rounded-lg border border-border"
           >
             <div className="border-b border-border bg-surface-2 px-3 py-2 text-sm text-fg-secondary">
               队伍排名{" "}
