@@ -16,13 +16,13 @@
 
 ### 1.2 官方 API 硬约束
 
-| 约束 | 设计对策 |
-|------|----------|
+| 约束                             | 设计对策                     |
+|--------------------------------|--------------------------|
 | Match / Telemetry 约 **14 天**保留 | 查询/收藏即入库；telemetry 落对象存储 |
-| Rate Limit | 网关限流、Redis 缓存、队列退避、用户级冷却 |
-| API Key 保密 | 仅服务端持有；前端只调自家 BFF |
-| Opt-in | 仅处理用户主动搜索/收藏的玩家 |
-| Shard / Platform | 统一内部枚举，对外暴露 `platform` |
+| Rate Limit                     | 网关限流、Redis 缓存、队列退避、用户级冷却 |
+| API Key 保密                     | 仅服务端持有；前端只调自家 BFF        |
+| Opt-in                         | 仅处理用户主动搜索/收藏的玩家          |
+| Shard / Platform               | 统一内部枚举，对外暴露 `platform`   |
 
 ### 1.3 推荐调用链
 
@@ -69,17 +69,17 @@ Client
 
 ### 2.3 错误码（建议）
 
-| code | 含义 |
-|------|------|
-| 0 | 成功 |
-| 40001 | 参数错误（平台/昵称） |
-| 40401 | 玩家不存在 |
-| 40402 | 对局不存在或已过期且未入库 |
-| 42901 | 官方或本地限流 |
-| 40901 | 刷新冷却中 |
+| code  | 含义             |
+|-------|----------------|
+| 0     | 成功             |
+| 40001 | 参数错误（平台/昵称）    |
+| 40401 | 玩家不存在          |
+| 40402 | 对局不存在或已过期且未入库  |
+| 42901 | 官方或本地限流        |
+| 40901 | 刷新冷却中          |
 | 50001 | 上游 PUBG API 异常 |
-| 50002 | 遥测解析失败 |
-| 50003 | 报告生成失败 |
+| 50002 | 遥测解析失败         |
+| 50003 | 报告生成失败         |
 
 ---
 
@@ -93,10 +93,10 @@ Client
 
 `GET /players/search`
 
-| Query | 类型 | 必填 | 说明 |
-|-------|------|------|------|
-| platform | string | 是 | steam/kakao/xbox/psn |
-| name | string | 是 | 游戏昵称 |
+| Query    | 类型     | 必填 | 说明                   |
+|----------|--------|----|----------------------|
+| platform | string | 是  | steam/kakao/xbox/psn |
+| name     | string | 是  | 游戏昵称                 |
 
 **Response `data`**
 
@@ -119,11 +119,11 @@ Client
 
 `GET /players/{accountId}/overview`
 
-| Query | 类型 | 必填 | 说明 |
-|-------|------|------|------|
-| seasonId | string | 否 | 默认当前赛季；`lifetime` 表示生涯 |
-| gameMode | string | 否 | 不传则返回各模式摘要 + 默认模式明细 |
-| ranked | boolean | 否 | true 时拉排位统计（若赛季支持） |
+| Query    | 类型      | 必填 | 说明                     |
+|----------|---------|----|------------------------|
+| seasonId | string  | 否  | 默认当前赛季；`lifetime` 表示生涯 |
+| gameMode | string  | 否  | 不传则返回各模式摘要 + 默认模式明细    |
+| ranked   | boolean | 否  | true 时拉排位统计（若赛季支持）     |
 
 **Response `data`（示意）**
 
@@ -187,10 +187,10 @@ Client
 
 **聚合逻辑**
 
-1. 读缓存 overview  
-2. miss → 拉 season/ranked/lifetime + player matches 列表  
-3. 异步补齐缺失 match 详情  
-4. weaknessTags / trend 来自本地 `match_report` + `match_participant` 聚合  
+1. 读缓存 overview
+2. miss → 拉 season/ranked/lifetime + player matches 列表
+3. 异步补齐缺失 match 详情
+4. weaknessTags / trend 来自本地 `match_report` + `match_participant` 聚合
 
 ---
 
@@ -208,15 +208,15 @@ Client
 
 `GET /players/{accountId}/matches`
 
-| Query | 说明 |
-|-------|------|
-| page / pageSize | 分页，pageSize 默认 20，最大 50 |
-| mapName | 可选 |
-| gameMode | 可选 |
-| result | `win` / `top10` / `other` |
-| tag | 弱点标签 code |
-| sort | `playedAt` / `damage` / `kills` / `rank` |
-| order | `asc` / `desc` |
+| Query           | 说明                                       |
+|-----------------|------------------------------------------|
+| page / pageSize | 分页，pageSize 默认 20，最大 50                  |
+| mapName         | 可选                                       |
+| gameMode        | 可选                                       |
+| result          | `win` / `top10` / `other`                |
+| tag             | 弱点标签 code                                |
+| sort            | `playedAt` / `damage` / `kills` / `rank` |
+| order           | `asc` / `desc`                           |
 
 **Response**
 
@@ -237,8 +237,8 @@ Client
 
 `GET /matches/{matchId}`
 
-| Query | 说明 |
-|-------|------|
+| Query     | 说明          |
+|-----------|-------------|
 | accountId | 可选，用于高亮视角玩家 |
 
 **Response `data`**
@@ -343,11 +343,11 @@ Client
 
 `GET /matches/{matchId}/telemetry/events`
 
-| Query | 说明 |
-|-------|------|
-| types | 逗号分隔：`position,kill,knock,revive,carePackage,zone` |
-| accountId | 可选，优先返回相关实体 |
-| sampleHz | 轨迹采样，默认 1（每秒 1 点），可选 0.5 |
+| Query     | 说明                                                 |
+|-----------|----------------------------------------------------|
+| types     | 逗号分隔：`position,kill,knock,revive,carePackage,zone` |
+| accountId | 可选，优先返回相关实体                                        |
+| sampleHz  | 轨迹采样，默认 1（每秒 1 点），可选 0.5                           |
 
 **Response（示意）**
 
@@ -396,10 +396,10 @@ Client
 
 `GET /players/{accountId}/analysis`
 
-| Query | 说明 |
-|-------|------|
-| range | `14d` / `20m`（近 20 场） |
-| gameMode | 可选 |
+| Query    | 说明                    |
+|----------|-----------------------|
+| range    | `14d` / `20m`（近 20 场） |
+| gameMode | 可选                    |
 
 **Response**
 
@@ -447,14 +447,14 @@ POST   /favorites/refresh   // 批量刷新（强冷却）
 
 ## 4. 对内任务与服务职责
 
-| 服务 | 职责 |
-|------|------|
-| PlayerService | 搜索、资料、赛季统计拉取与缓存 |
-| MatchService | 对局列表/详情、入库、去重 |
-| TelemetryService | 下载、压缩存储、解析为事件模型 |
-| AnalysisService | 单场报告、玩家级聚合诊断 |
-| SyncJob | 收藏玩家定时增量同步 |
-| PubgClient | 官方 API 封装、重试、限流、gzip |
+| 服务               | 职责                   |
+|------------------|----------------------|
+| PlayerService    | 搜索、资料、赛季统计拉取与缓存      |
+| MatchService     | 对局列表/详情、入库、去重        |
+| TelemetryService | 下载、压缩存储、解析为事件模型      |
+| AnalysisService  | 单场报告、玩家级聚合诊断         |
+| SyncJob          | 收藏玩家定时增量同步           |
+| PubgClient       | 官方 API 封装、重试、限流、gzip |
 
 ### 4.1 同步时序（搜索命中后）
 
@@ -471,13 +471,13 @@ search player
 
 ### 4.2 缓存策略
 
-| Key | TTL | 说明 |
-|-----|-----|------|
-| `player:name:{platform}:{name}` | 24h | 名 → accountId |
-| `player:overview:{accountId}:{season}:{mode}` | 5～15min | 概览 |
-| `match:{matchId}` | 7～30d 或永久 | 对局几乎不变 |
-| `report:{matchId}:{accountId}` | 永久（规则版本变更可失效） | |
-| `telemetry:events:{matchId}` | 永久（存储侧） | Redis 可只放热点 |
+| Key                                           | TTL           | 说明            |
+|-----------------------------------------------|---------------|---------------|
+| `player:name:{platform}:{name}`               | 24h           | 名 → accountId |
+| `player:overview:{accountId}:{season}:{mode}` | 5～15min       | 概览            |
+| `match:{matchId}`                             | 7～30d 或永久     | 对局几乎不变        |
+| `report:{matchId}:{accountId}`                | 永久（规则版本变更可失效） |               |
+| `telemetry:events:{matchId}`                  | 永久（存储侧）       | Redis 可只放热点   |
 
 刷新接口强制 bypass 短 TTL 缓存。
 
@@ -501,16 +501,16 @@ user_account 1──* user_favorite *──1 player
 
 ### 5.2 `player`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增 |
-| account_id | VARCHAR(64) UK | PUBG account.xxx |
-| platform | VARCHAR(16) | steam/kakao/... |
-| shard | VARCHAR(32) | 请求用 shard |
-| name | VARCHAR(64) | 当前昵称 |
-| name_lower | VARCHAR(64) | 检索辅助 |
-| last_synced_at | DATETIME | 上次成功同步 |
-| created_at / updated_at | DATETIME | |
+| 字段                      | 类型             | 说明               |
+|-------------------------|----------------|------------------|
+| id                      | BIGINT PK      | 自增               |
+| account_id              | VARCHAR(64) UK | PUBG account.xxx |
+| platform                | VARCHAR(16)    | steam/kakao/...  |
+| shard                   | VARCHAR(32)    | 请求用 shard        |
+| name                    | VARCHAR(64)    | 当前昵称             |
+| name_lower              | VARCHAR(64)    | 检索辅助             |
+| last_synced_at          | DATETIME       | 上次成功同步           |
+| created_at / updated_at | DATETIME       |                  |
 
 索引：`uk_account_id`；`idx_platform_name_lower`
 
@@ -518,12 +518,12 @@ user_account 1──* user_favorite *──1 player
 
 ### 5.3 `player_name_history`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | |
-| account_id | VARCHAR(64) | |
-| name | VARCHAR(64) | |
-| observed_at | DATETIME | 首次观察到该名 |
+| 字段          | 类型          | 说明      |
+|-------------|-------------|---------|
+| id          | BIGINT PK   |         |
+| account_id  | VARCHAR(64) |         |
+| name        | VARCHAR(64) |         |
+| observed_at | DATETIME    | 首次观察到该名 |
 
 索引：`idx_account_id`；`idx_name`
 
@@ -533,16 +533,16 @@ user_account 1──* user_favorite *──1 player
 
 用于概览加速与历史对比（可选但推荐）。
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | |
-| account_id | VARCHAR(64) | |
-| season_id | VARCHAR(128) | |
-| game_mode | VARCHAR(32) | |
-| ranked | TINYINT | 0/1 |
-| stats_json | JSON | 标准化后的统计 |
-| raw_hash | CHAR(40) | 变更检测 |
-| fetched_at | DATETIME | |
+| 字段         | 类型           | 说明      |
+|------------|--------------|---------|
+| id         | BIGINT PK    |         |
+| account_id | VARCHAR(64)  |         |
+| season_id  | VARCHAR(128) |         |
+| game_mode  | VARCHAR(32)  |         |
+| ranked     | TINYINT      | 0/1     |
+| stats_json | JSON         | 标准化后的统计 |
+| raw_hash   | CHAR(40)     | 变更检测    |
+| fetched_at | DATETIME     |         |
 
 UK：`(account_id, season_id, game_mode, ranked)`
 
@@ -550,19 +550,19 @@ UK：`(account_id, season_id, game_mode, ranked)`
 
 ### 5.5 `match`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | |
-| match_id | VARCHAR(64) UK | 官方 ID |
-| shard | VARCHAR(32) | |
-| map_name | VARCHAR(64) | 原始 mapName |
-| game_mode | VARCHAR(32) | |
-| played_at | DATETIME | |
-| duration_sec | INT | |
-| is_custom | TINYINT | |
-| player_count | INT | |
-| raw_json_ref | VARCHAR(256) | 对象存储路径或空 |
-| created_at | DATETIME | |
+| 字段           | 类型             | 说明         |
+|--------------|----------------|------------|
+| id           | BIGINT PK      |            |
+| match_id     | VARCHAR(64) UK | 官方 ID      |
+| shard        | VARCHAR(32)    |            |
+| map_name     | VARCHAR(64)    | 原始 mapName |
+| game_mode    | VARCHAR(32)    |            |
+| played_at    | DATETIME       |            |
+| duration_sec | INT            |            |
+| is_custom    | TINYINT        |            |
+| player_count | INT            |            |
+| raw_json_ref | VARCHAR(256)   | 对象存储路径或空   |
+| created_at   | DATETIME       |            |
 
 索引：`idx_played_at`；`idx_map_mode`
 
@@ -570,28 +570,28 @@ UK：`(account_id, season_id, game_mode, ranked)`
 
 ### 5.6 `match_participant`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | |
-| match_id | VARCHAR(64) | |
-| account_id | VARCHAR(64) | 可能为空（稀有） |
-| name | VARCHAR(64) | |
-| roster_id | VARCHAR(64) | |
-| team_id | INT | 可选 |
-| team_rank | INT | |
-| win_place | INT | 个人/队伍排名 |
-| kills | INT | |
-| assists | INT | |
-| damage_dealt | DECIMAL(10,2) | |
-| dbnos | INT | |
-| revives | INT | |
-| heals / boosts | INT | |
-| survival_time_sec | INT | |
-| ride_distance / walk_distance | DECIMAL(12,2) | |
-| longest_kill | DECIMAL(10,2) | |
-| headshot_kills | INT | |
-| weapons_json | JSON | 若详情可解析 |
-| stats_json | JSON | 其余字段兜底 |
+| 字段                            | 类型            | 说明       |
+|-------------------------------|---------------|----------|
+| id                            | BIGINT PK     |          |
+| match_id                      | VARCHAR(64)   |          |
+| account_id                    | VARCHAR(64)   | 可能为空（稀有） |
+| name                          | VARCHAR(64)   |          |
+| roster_id                     | VARCHAR(64)   |          |
+| team_id                       | INT           | 可选       |
+| team_rank                     | INT           |          |
+| win_place                     | INT           | 个人/队伍排名  |
+| kills                         | INT           |          |
+| assists                       | INT           |          |
+| damage_dealt                  | DECIMAL(10,2) |          |
+| dbnos                         | INT           |          |
+| revives                       | INT           |          |
+| heals / boosts                | INT           |          |
+| survival_time_sec             | INT           |          |
+| ride_distance / walk_distance | DECIMAL(12,2) |          |
+| longest_kill                  | DECIMAL(10,2) |          |
+| headshot_kills                | INT           |          |
+| weapons_json                  | JSON          | 若详情可解析   |
+| stats_json                    | JSON          | 其余字段兜底   |
 
 UK：`(match_id, account_id)`（account 空时用 name 降级策略需谨慎）  
 索引：`idx_account_played` → 需联表 match.played_at，或冗余 `played_at`
@@ -602,35 +602,35 @@ UK：`(match_id, account_id)`（account 空时用 name 降级策略需谨慎）
 
 ### 5.7 `telemetry_asset`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | |
-| match_id | VARCHAR(64) UK | |
-| status | VARCHAR(16) | pending/ready/failed/expired |
-| source_url | VARCHAR(512) | 官方 telemetry URL（可空） |
-| storage_url | VARCHAR(512) | 自有对象存储 |
-| events_url | VARCHAR(512) | 精简事件文件路径 |
-| error_message | VARCHAR(512) | |
-| parsed_at | DATETIME | |
-| rule_or_parser_ver | VARCHAR(32) | 解析器版本 |
+| 字段                 | 类型             | 说明                           |
+|--------------------|----------------|------------------------------|
+| id                 | BIGINT PK      |                              |
+| match_id           | VARCHAR(64) UK |                              |
+| status             | VARCHAR(16)    | pending/ready/failed/expired |
+| source_url         | VARCHAR(512)   | 官方 telemetry URL（可空）         |
+| storage_url        | VARCHAR(512)   | 自有对象存储                       |
+| events_url         | VARCHAR(512)   | 精简事件文件路径                     |
+| error_message      | VARCHAR(512)   |                              |
+| parsed_at          | DATETIME       |                              |
+| rule_or_parser_ver | VARCHAR(32)    | 解析器版本                        |
 
 ---
 
 ### 5.8 `match_report`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | |
-| match_id | VARCHAR(64) | |
-| account_id | VARCHAR(64) | |
-| primary_tag | VARCHAR(64) | |
-| tags_json | JSON | |
-| summary_json | JSON | string[] |
-| suggestions_json | JSON | string[] |
-| metrics_json | JSON | |
-| confidence | VARCHAR(16) | high/medium/low |
-| rule_version | VARCHAR(32) | |
-| generated_at | DATETIME | |
+| 字段               | 类型          | 说明              |
+|------------------|-------------|-----------------|
+| id               | BIGINT PK   |                 |
+| match_id         | VARCHAR(64) |                 |
+| account_id       | VARCHAR(64) |                 |
+| primary_tag      | VARCHAR(64) |                 |
+| tags_json        | JSON        |                 |
+| summary_json     | JSON        | string[]        |
+| suggestions_json | JSON        | string[]        |
+| metrics_json     | JSON        |                 |
+| confidence       | VARCHAR(16) | high/medium/low |
+| rule_version     | VARCHAR(32) |                 |
+| generated_at     | DATETIME    |                 |
 
 UK：`(match_id, account_id, rule_version)` 或仅 `(match_id, account_id)` + 版本字段覆盖更新。
 
@@ -642,13 +642,13 @@ UK：`(match_id, account_id, rule_version)` 或仅 `(match_id, account_id)` + �
 
 `user_favorite`
 
-| 字段 | 类型 |
-|------|------|
-| id | BIGINT PK |
-| user_id | BIGINT |
-| account_id | VARCHAR(64) |
-| created_at | DATETIME |
-| last_sync_at | DATETIME |
+| 字段           | 类型          |
+|--------------|-------------|
+| id           | BIGINT PK   |
+| user_id      | BIGINT      |
+| account_id   | VARCHAR(64) |
+| created_at   | DATETIME    |
+| last_sync_at | DATETIME    |
 
 UK：`(user_id, account_id)`
 
@@ -662,16 +662,16 @@ UK：`(user_id, account_id)`
 
 ## 6. 与官方端点映射
 
-| 我方能力 | 官方端点 |
-|----------|----------|
-| 搜索 | `/shards/{shard}/players?filter[playerNames]=` |
+| 我方能力 | 官方端点                                              |
+|------|---------------------------------------------------|
+| 搜索   | `/shards/{shard}/players?filter[playerNames]=`    |
 | 赛季统计 | `/shards/{shard}/players/{id}/seasons/{seasonId}` |
-| 排位统计 | `.../seasons/{seasonId}/ranked` |
-| 生涯 | `.../seasons/lifetime` |
-| 对局详情 | `/shards/{shard}/matches/{matchId}` |
-| 遥测 | match included 中的 telemetry URL（资产下载） |
-| 赛季列表 | `/shards/{shard}/seasons` |
-| 武器精通 | Mastery 端点（P2） |
+| 排位统计 | `.../seasons/{seasonId}/ranked`                   |
+| 生涯   | `.../seasons/lifetime`                            |
+| 对局详情 | `/shards/{shard}/matches/{matchId}`               |
+| 遥测   | match included 中的 telemetry URL（资产下载）             |
+| 赛季列表 | `/shards/{shard}/seasons`                         |
+| 武器精通 | Mastery 端点（P2）                                    |
 
 平台 shard 示例：PC Steam → `steam`；Kakao → `kakao`；主机按文档用 `xbox` / `psn` / `console`。
 
@@ -691,15 +691,15 @@ UK：`(user_id, account_id)`
 
 #### A. 仅 Match 统计（P0 必有）
 
-| 特征 | 来源 |
-|------|------|
-| winPlace / teamRank | participant |
+| 特征                          | 来源          |
+|-----------------------------|-------------|
+| winPlace / teamRank         | participant |
 | kills, assists, damageDealt | participant |
-| survivalTimeSec | participant |
-| dbnos, revives | participant |
-| walk/ride distance | participant |
-| longestKill, headshotKills | participant |
-| mapName, gameMode, duration | match |
+| survivalTimeSec             | participant |
+| dbnos, revives              | participant |
+| walk/ride distance          | participant |
+| longestKill, headshotKills  | participant |
+| mapName, gameMode, duration | match       |
 
 派生：
 
@@ -710,34 +710,34 @@ UK：`(user_id, account_id)`
 
 #### B. Telemetry 增强（P1）
 
-| 特征 | 说明 |
-|------|------|
-| phaseAtDeath | 死亡时所在安全区阶段 |
-| distanceToSafeZoneEdgeM | 死亡点到蓝圈边距离 |
-| enemiesNearbyAtDeath | 死亡前 N 秒半径内敌人数 |
-| attackerCountInWindow | 致死窗口内攻击者数 |
-| landLocationCluster | 落点是否热门区（需地图 POI 配置）
-| throwablesUsedEndgame | 决赛圈投掷使用次数 |
-| weaponDamageShare | 武器伤害占比 |
-| teammateDistanceAtDeath | 阵亡时与最近队友距离 |
+| 特征                      | 说明                  |
+|-------------------------|---------------------|
+| phaseAtDeath            | 死亡时所在安全区阶段          |
+| distanceToSafeZoneEdgeM | 死亡点到蓝圈边距离           |
+| enemiesNearbyAtDeath    | 死亡前 N 秒半径内敌人数       |
+| attackerCountInWindow   | 致死窗口内攻击者数           |
+| landLocationCluster     | 落点是否热门区（需地图 POI 配置） 
+| throwablesUsedEndgame   | 决赛圈投掷使用次数           |
+| weaponDamageShare       | 武器伤害占比              |
+| teammateDistanceAtDeath | 阵亡时与最近队友距离          |
 
 ---
 
 ### 7.3 标签字典
 
-| code | 中文标签 | 典型含义 |
-|------|----------|----------|
-| hot_drop | 落点过热 | 开局过早混战死亡 |
-| early_exit | 前期出局 | 前 25% 时长死亡且排名差 |
-| mid_third_party | 中期第三人 | 中期多敌人交火死亡 |
-| mid_overfight | 中期硬刚 | 中期伤害高但仍翻车 |
-| late_rotate | 收边偏晚 | 死亡点贴圈外/追圈 |
-| endgame_nades | 决赛圈投掷不足 | 决赛阶段零投掷且近战死亡 |
-| aim_inconsistent | 枪感不稳 | 伤害尚可但击杀转化低 |
-| low_damage | 输出不足 | 存活久但伤害很低 |
-| isolated_death | 脱离队伍 | 阵亡时队友过远 |
-| vehicle_risk | 载具相关阵亡 | （遥测）载具中被打掉 |
-| good_game | 优质对局 | 吃鸡或高排高伤（正向） |
+| code             | 中文标签    | 典型含义           |
+|------------------|---------|----------------|
+| hot_drop         | 落点过热    | 开局过早混战死亡       |
+| early_exit       | 前期出局    | 前 25% 时长死亡且排名差 |
+| mid_third_party  | 中期第三人   | 中期多敌人交火死亡      |
+| mid_overfight    | 中期硬刚    | 中期伤害高但仍翻车      |
+| late_rotate      | 收边偏晚    | 死亡点贴圈外/追圈      |
+| endgame_nades    | 决赛圈投掷不足 | 决赛阶段零投掷且近战死亡   |
+| aim_inconsistent | 枪感不稳    | 伤害尚可但击杀转化低     |
+| low_damage       | 输出不足    | 存活久但伤害很低       |
+| isolated_death   | 脱离队伍    | 阵亡时队友过远        |
+| vehicle_risk     | 载具相关阵亡  | （遥测）载具中被打掉     |
+| good_game        | 优质对局    | 吃鸡或高排高伤（正向）    |
 
 ---
 
@@ -793,9 +793,9 @@ IF winPlace == 1 OR (winPlace <= 3 AND damageDealt >= 500):
 
 **主因选择**
 
-1. 优先 high confidence 负向标签  
-2. 同级按业务权重：`hot_drop > mid_third_party > late_rotate > endgame_nades > aim_inconsistent > low_damage`  
-3. 若只有 `good_game`，主因可为正向  
+1. 优先 high confidence 负向标签
+2. 同级按业务权重：`hot_drop > mid_third_party > late_rotate > endgame_nades > aim_inconsistent > low_damage`
+3. 若只有 `good_game`，主因可为正向
 
 ---
 
@@ -825,25 +825,25 @@ suggestions map:
 
 对近 N 场标签与指标做归一（0～100）：
 
-| 维度 | 粗算 |
-|------|------|
-| survival | 平均排名、Top10 率、存活时长 |
-| aim | 场均伤害、击杀、爆头率（有则） |
-| landing | `hot_drop` 频次越低分越高 |
-| endgame | 进入后期比例 + `endgame_nades/late_rotate` 负向 |
-| teamplay | 救援、助攻、`isolated_death` 负向 |
+| 维度       | 粗算                                      |
+|----------|-----------------------------------------|
+| survival | 平均排名、Top10 率、存活时长                       |
+| aim      | 场均伤害、击杀、爆头率（有则）                         |
+| landing  | `hot_drop` 频次越低分越高                      |
+| endgame  | 进入后期比例 + `endgame_nades/late_rotate` 负向 |
+| teamplay | 救援、助攻、`isolated_death` 负向               |
 
 ---
 
 ### 7.7 无遥测降级策略
 
-| 能力 | 降级 |
-|------|------|
-| 主因标签 | 仅 early_exit / low_damage / aim_inconsistent / good_game 等 |
-| summary | 去掉圈距、附近敌人数 |
-| suggestions | 使用通用建议模板 |
-| confidence | 多为 low/medium |
-| UI | 报告标注「基于基础战绩的初判；加载回放后可增强」 |
+| 能力          | 降级                                                         |
+|-------------|------------------------------------------------------------|
+| 主因标签        | 仅 early_exit / low_damage / aim_inconsistent / good_game 等 |
+| summary     | 去掉圈距、附近敌人数                                                 |
+| suggestions | 使用通用建议模板                                                   |
+| confidence  | 多为 low/medium                                              |
+| UI          | 报告标注「基于基础战绩的初判；加载回放后可增强」                                   |
 
 Match 入库后 **立即** 出 P0 报告；telemetry ready 后 **重算** 覆盖为增强版（同 rule_version 下升级 confidence）。
 
@@ -873,12 +873,12 @@ Match 入库后 **立即** 出 P0 报告；telemetry ready 后 **重算** 覆盖
 
 ## 9. 任务队列建议
 
-| Topic | Payload | 并发建议 |
-|-------|---------|----------|
-| match.fetch | matchId, shard | 中 |
-| telemetry.parse | matchId | 低（CPU/IO 重） |
-| report.build | matchId, accountId | 中 |
-| player.sync | accountId | 按收藏量 |
+| Topic           | Payload            | 并发建议        |
+|-----------------|--------------------|-------------|
+| match.fetch     | matchId, shard     | 中           |
+| telemetry.parse | matchId            | 低（CPU/IO 重） |
+| report.build    | matchId, accountId | 中           |
+| player.sync     | accountId          | 按收藏量        |
 
 失败重试 3～5 次；telemetry 失败标记 `failed`，允许手动重试。
 
@@ -886,12 +886,12 @@ Match 入库后 **立即** 出 P0 报告；telemetry ready 后 **重算** 覆盖
 
 ## 10. 里程碑与接口交付对照
 
-| 里程碑 | API | 表 |
-|--------|-----|----|
-| M1 | search, overview, matches, match detail, refresh | player, match, match_participant, season_stats_snapshot |
-| M2 | report, analysis, favorites | match_report, user_favorite |
-| M3 | telemetry parse/events | telemetry_asset + 对象存储 |
-| M4 | 武器/地图聚合、对比、分享 | 聚合查询或物化表 |
+| 里程碑 | API                                              | 表                                                       |
+|-----|--------------------------------------------------|---------------------------------------------------------|
+| M1  | search, overview, matches, match detail, refresh | player, match, match_participant, season_stats_snapshot |
+| M2  | report, analysis, favorites                      | match_report, user_favorite                             |
+| M3  | telemetry parse/events                           | telemetry_asset + 对象存储                                  |
+| M4  | 武器/地图聚合、对比、分享                                    | 聚合查询或物化表                                                |
 
 ---
 
@@ -909,17 +909,17 @@ Match 入库后 **立即** 出 P0 报告；telemetry ready 后 **重算** 覆盖
 
 ## 12. 附录：地图名展示映射（摘录）
 
-| mapName（示例） | 展示名 |
-|-----------------|--------|
-| Baltic_Main | Erangel |
-| Desert_Main | Miramar |
-| Savage_Main | Sanhok |
-| DihorOtok_Main | Vikendi |
+| mapName（示例）     | 展示名     |
+|-----------------|---------|
+| Baltic_Main     | Erangel |
+| Desert_Main     | Miramar |
+| Savage_Main     | Sanhok  |
+| DihorOtok_Main  | Vikendi |
 | Summerland_Main | Karakin |
-| Tiger_Main | Taego |
-| Kiki_Main | Deston |
-| Chimera_Main | Paramo |
-| Neon_Main | Rondo |
+| Tiger_Main      | Taego   |
+| Kiki_Main       | Deston  |
+| Chimera_Main    | Paramo  |
+| Neon_Main       | Rondo   |
 
 具体以当前赛季官方返回值为准，建议做成可配置字典。
 
