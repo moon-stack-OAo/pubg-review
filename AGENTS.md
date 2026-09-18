@@ -21,26 +21,26 @@
 
 ## 目录速查
 
-| 路径 | 用途 |
-|------|------|
-| `src/lib/pubg/` | 官方 API 客户端与聚合服务（含多 Key） |
-| `src/lib/analysis/` | 复盘规则引擎（无遥测 / 遥测增强） |
-| `src/lib/telemetry/` | 下载、解析、落盘 |
-| `src/lib/history/`、`squad/`、`persist/` | 历史库、车队、通用 JSON 落盘 |
-| `src/proxy.ts` | BFF 网关限流 |
-| `src/lib/mcp/` | Remote MCP Tools |
-| `deploy/` | PM2、Nginx、pack、Release 更新脚本与说明 |
-| `docs/` | PRD / API / 待办 / 缺口（本地规划为主） |
+| 路径                                     | 用途                             |
+|----------------------------------------|--------------------------------|
+| `src/lib/pubg/`                        | 官方 API 客户端与聚合服务（含多 Key）        |
+| `src/lib/analysis/`                    | 复盘规则引擎（无遥测 / 遥测增强）             |
+| `src/lib/telemetry/`                   | 下载、解析、落盘                       |
+| `src/lib/history/`、`squad/`、`persist/` | 历史库、车队、通用 JSON 落盘              |
+| `src/proxy.ts`                         | BFF 网关限流                       |
+| `src/lib/mcp/`                         | Remote MCP Tools               |
+| `deploy/`                              | PM2、Nginx、pack、Release 更新脚本与说明 |
+| `docs/`                                | PRD / API / 待办 / 缺口（本地规划为主）    |
 
 ## 环境变量（摘要）
 
-| 变量 | 说明 |
-|------|------|
-| `PUBG_API_KEY` | 单个 Key |
-| `PUBG_API_KEYS` | 多 Key（逗号或 JSON 数组）；与上者合并去重；轮询，遇 429 换下一个 |
-| `RATE_LIMIT_RPM` / `RATE_LIMIT_MUTATION_RPM` | BFF 限流 |
-| `TRUST_PROXY` | 反代后信任 `X-Forwarded-For`（默认 false） |
-| `MCP_ENABLED` / `MCP_TOKEN` | Remote MCP |
+| 变量                                           | 说明                                       |
+|----------------------------------------------|------------------------------------------|
+| `PUBG_API_KEY`                               | 单个 Key                                   |
+| `PUBG_API_KEYS`                              | 多 Key（逗号或 JSON 数组）；与上者合并去重；轮询，遇 429 换下一个 |
+| `RATE_LIMIT_RPM` / `RATE_LIMIT_MUTATION_RPM` | BFF 限流                                   |
+| `TRUST_PROXY`                                | 反代后信任 `X-Forwarded-For`（默认 false）        |
+| `MCP_ENABLED` / `MCP_TOKEN`                  | Remote MCP                               |
 
 完整说明见 `.env.example`、`README.md`。
 
