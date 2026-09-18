@@ -16,6 +16,8 @@ export function toHistoryRecord(
     mapName: match.mapName,
     mapLabel: mapLabel(match.mapName),
     gameMode: match.gameMode,
+    matchType: match.matchType,
+    isCustomMatch: match.isCustomMatch,
     playedAt: match.playedAt,
     durationSec: match.durationSec,
     rank: me?.winPlace ?? null,

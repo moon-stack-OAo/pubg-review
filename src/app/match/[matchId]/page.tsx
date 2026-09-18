@@ -149,7 +149,11 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
             {data ? (
               <>
-                <GameModeChips gameMode={data.gameMode} />
+                <GameModeChips
+                  gameMode={data.gameMode}
+                  matchType={data.matchType}
+                  isCustomMatch={data.isCustomMatch}
+                />
                 <span className="font-mono">
                   {formatDateTime(data.playedAt)} · 时长{" "}
                   {formatDuration(data.durationSec)}

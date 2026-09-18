@@ -6,6 +6,8 @@ export type HistoryMatchRecord = {
   mapName: string;
   mapLabel: string;
   gameMode: string;
+  matchType?: string;
+  isCustomMatch?: boolean;
   playedAt: string;
   durationSec: number;
   rank: number | null;

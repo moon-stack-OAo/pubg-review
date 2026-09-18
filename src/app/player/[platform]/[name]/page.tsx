@@ -24,6 +24,7 @@ import {getPlayerFormAnalysis, type PlayerFormAnalysis,} from "@/lib/analysis/pl
 import type {ReportTagCode} from "@/lib/analysis/report-engine";
 import {EMPTY_RECENT_MATCHES, friendlyErrorMessage} from "@/lib/errors";
 import {formatDateTime, formatDuration, formatNumber, formatPercent, rankClass,} from "@/lib/format";
+import {gameModeLabel} from "@/lib/game-mode";
 import type {PubgBanType} from "@/lib/pubg/types";
 import {isPubgPlatform} from "@/lib/pubg/types";
 import type {
@@ -762,7 +763,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                     ) : null}
                     {gameMode ? (
                       <span className="ml-2 text-sm font-normal text-sky-300">
-                        · 模式 {gameMode}
+                        · 模式 {gameModeLabel(gameMode)}
                       </span>
                     ) : null}
                   </h2>
@@ -913,6 +914,8 @@ function MatchTable({
     mapName?: string;
     mapLabel: string;
     gameMode: string;
+    matchType?: string;
+    isCustomMatch?: boolean;
     rank: number | null;
     kills: number;
     damage: number;
@@ -961,7 +964,12 @@ function MatchTable({
                 </td>
                 <td className="px-2 py-2">{m.mapLabel}</td>
                 <td className="px-2 py-2">
-                  <GameModeChips gameMode={m.gameMode} size="sm" />
+                  <GameModeChips
+                    gameMode={m.gameMode}
+                    matchType={m.matchType}
+                    isCustomMatch={m.isCustomMatch}
+                    size="sm"
+                  />
                 </td>
                 <td className={`px-2 py-2 font-medium ${rankClass(m.rank)}`}>
                   {m.rank == null ? "-" : `#${m.rank}`}

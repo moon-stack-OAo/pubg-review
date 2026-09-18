@@ -380,6 +380,8 @@ async function computeSquadStats(args: {
       playedAt: match.playedAt,
       teamRank,
       gameMode: match.gameMode,
+      matchType: match.matchType,
+      isCustomMatch: match.isCustomMatch,
       players: playerRows,
     });
   }

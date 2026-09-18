@@ -34,6 +34,8 @@ export type SquadMatchRow = {
   playedAt: string;
   teamRank: number | null;
   gameMode: string;
+  matchType?: string;
+  isCustomMatch?: boolean;
   players: SquadMatchPlayerRow[];
 };
 

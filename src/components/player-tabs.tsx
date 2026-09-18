@@ -3,6 +3,7 @@ import type {ComparePlayerSide, MapAggRow, WeaponsTabData,} from "@/lib/history/
 import type {FormStatusCode, FormStatusResult,} from "@/lib/analysis/form-status";
 import type {WeaknessTagSummary} from "@/lib/analysis/player-analysis-core";
 import {formatNumber, formatPercent} from "@/lib/format";
+import {gameModeLabel} from "@/lib/game-mode";
 import {CompareForm} from "@/components/compare-form";
 
 const FORM_CHIP_TONE: Record<FormStatusCode, string> = {
@@ -292,7 +293,7 @@ export function MapsTabPanel({
     <div className="space-y-3">
       <p className="text-sm text-muted">
         基于本地历史库近 {sampleSize} 场
-        {gameModeFilter ? ` · 模式 ${gameModeFilter}` : " · 全部模式"}
+        {gameModeFilter ? ` · 模式 ${gameModeLabel(gameModeFilter)}` : " · 全部模式"}
         。KD≈ 为近似值，非官方赛季 KD。
       </p>
       {rows.length === 0 ? (

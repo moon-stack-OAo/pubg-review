@@ -63,6 +63,8 @@ export type PubgMatchSummary = {
   shard: string;
   mapName: string;
   gameMode: string;
+  /** official / competitive / airoyale / seasonal 等；旧缓存可能缺失 */
+  matchType?: string;
   playedAt: string;
   durationSec: number;
   isCustomMatch: boolean;

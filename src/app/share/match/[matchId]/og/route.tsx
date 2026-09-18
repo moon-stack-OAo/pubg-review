@@ -1,5 +1,6 @@
 import {ImageResponse} from "next/og";
 import {buildMatchReport} from "@/lib/analysis/report-service";
+import {gameModeLabel, matchTypeLabel} from "@/lib/game-mode";
 import {mapLabel} from "@/lib/pubg/maps";
 import {getCachedMatch} from "@/lib/pubg/service";
 import {isPubgPlatform} from "@/lib/pubg/types";
@@ -49,7 +50,8 @@ export async function GET(request: Request, { params }: RouteProps) {
   try {
     const { value: match } = await getCachedMatch(platform, matchId);
     mapText = mapLabel(match.mapName);
-    modeText = match.gameMode;
+    const typeLabel = matchTypeLabel(match.matchType, match.isCustomMatch);
+    modeText = `${gameModeLabel(match.gameMode)}${typeLabel ? ` · ${typeLabel}` : ""}`;
 
     if (accountId) {
       const focus = match.rosters

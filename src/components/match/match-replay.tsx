@@ -2,7 +2,7 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState,} from "react";
 import {formatDuration} from "@/lib/format";
-import {mapSizeCm} from "@/lib/pubg/maps";
+import {mapLabel, mapSizeCm} from "@/lib/pubg/maps";
 import type {
     TelemetryEventsPayload,
     TelemetryGunline,
@@ -455,7 +455,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">2D 回放（MVP）</h2>
         <span className="text-xs text-muted">
-          {data.mapName} · 坐标粗归一 · 非官方贴图
+          {mapLabel(data.mapName)} · 坐标粗归一 · 非官方贴图
         </span>
       </div>
 

@@ -8,6 +8,7 @@ import {
   rankClass,
 } from "@/lib/format";
 import type {PlayerWindowStats} from "@/lib/history/types";
+import {gameModeLabel} from "@/lib/game-mode";
 
 export function WindowStatsCard({
   stats,
@@ -51,7 +52,7 @@ export function WindowStatsCard({
           <h2 className="font-medium">{title}</h2>
           <p className="mt-0.5 text-xs text-muted">
             {formatDateTime(stats.since)} — {formatDateTime(stats.until)}
-            {stats.gameModeFilter ? ` · ${stats.gameModeFilter}` : ""}
+            {stats.gameModeFilter ? ` · ${gameModeLabel(stats.gameModeFilter)}` : ""}
             {` · 本地库 ${stats.historyTotal} 场`}
           </p>
         </div>

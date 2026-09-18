@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type {ButtonHTMLAttributes, ReactNode} from "react";
-import {parseGameMode} from "@/lib/game-mode";
+import {parseGameMode, parseMatchType} from "@/lib/game-mode";
 
 export function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -226,14 +226,19 @@ export function Chip({
 
 export function GameModeChips({
   gameMode,
+  matchType,
+  isCustomMatch = false,
   className = "",
   size = "md",
 }: {
   gameMode: string;
+  matchType?: string | null;
+  isCustomMatch?: boolean;
   className?: string;
   size?: "sm" | "md";
 }) {
   const parsed = parseGameMode(gameMode);
+  const parsedMatchType = parseMatchType(matchType, isCustomMatch);
   const modeTone: ChipTone =
     parsed.mode === "other" ? "neutral" : parsed.mode;
   const chipSize =
@@ -250,6 +255,22 @@ export function GameModeChips({
           className={chipSize}
         >
           {parsed.perspectiveLabel}
+        </Chip>
+      ) : null}
+      {parsedMatchType.label ? (
+        <Chip
+          tone={
+            parsedMatchType.kind === "competitive"
+              ? "warning"
+              : parsedMatchType.kind === "casual"
+                ? "success"
+                : parsedMatchType.kind === "custom"
+                  ? "accent"
+                  : "neutral"
+          }
+          className={chipSize}
+        >
+          {parsedMatchType.label}
         </Chip>
       ) : null}
     </span>

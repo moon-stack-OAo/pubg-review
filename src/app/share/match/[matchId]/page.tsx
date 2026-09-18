@@ -5,6 +5,7 @@ import {AppTopbar, Card, ErrorBox, GameModeChips, PageShell, buttonClass} from "
 import {buildMatchReport} from "@/lib/analysis/report-service";
 import {formatDateTime, formatDuration, formatNumber, rankClass,} from "@/lib/format";
 import {friendlyErrorMessage} from "@/lib/errors";
+import {gameModeLabel, matchTypeLabel} from "@/lib/game-mode";
 import {mapLabel} from "@/lib/pubg/maps";
 import {getCachedMatch} from "@/lib/pubg/service";
 import {isPubgPlatform, type PubgPlatform} from "@/lib/pubg/types";
@@ -39,7 +40,8 @@ export async function generateMetadata({
   try {
     const { value: match } = await loadShareMatch(platform, matchId);
     const map = mapLabel(match.mapName);
-    let title = `${map} · ${match.gameMode} · PUBG Review`;
+    const typeLabel = matchTypeLabel(match.matchType, match.isCustomMatch);
+    let title = `${map} · ${gameModeLabel(match.gameMode)}${typeLabel ? ` · ${typeLabel}` : ""} · PUBG Review`;
     let description = `${formatDateTime(match.playedAt)} · 时长 ${formatDuration(match.durationSec)}`;
     let primaryLabel = "";
     if (accountId) {
@@ -187,7 +189,12 @@ export default async function ShareMatchPage({
                     {mapLabel(match.mapName)}
                   </h1>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-fg-secondary">
-                    <GameModeChips gameMode={match.gameMode} size="sm" />
+                    <GameModeChips
+                      gameMode={match.gameMode}
+                      matchType={match.matchType}
+                      isCustomMatch={match.isCustomMatch}
+                      size="sm"
+                    />
                     <span>{formatDateTime(match.playedAt)}</span>
                   </div>
                 </div>

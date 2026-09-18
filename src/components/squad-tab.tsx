@@ -6,6 +6,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {ExportSquadCsv} from "@/components/export-squad-csv";
 import {GameModeChips} from "@/components/ui";
 import {formatDateTime, formatDuration, formatNumber, formatPercent, rankClass,} from "@/lib/format";
+import {gameModeLabel} from "@/lib/game-mode";
 import {readSquadMates, writeSquadMates,} from "@/lib/squad-mates-storage";
 import type {SquadMatchRow, SquadMemberStats, SquadSampleMeta, SquadStatsResult,} from "@/lib/squad/types";
 
@@ -636,7 +637,12 @@ function FullSquadMatches({
                 </td>
                 <td className="px-2 py-2">{m.mapLabel}</td>
                 <td className="px-2 py-2">
-                  <GameModeChips gameMode={m.gameMode} size="sm" />
+                  <GameModeChips
+                    gameMode={m.gameMode}
+                    matchType={m.matchType}
+                    isCustomMatch={m.isCustomMatch}
+                    size="sm"
+                  />
                 </td>
                 <td className={`px-2 py-2 font-medium ${rankClass(m.teamRank)}`}>
                   {m.teamRank == null ? "-" : `#${m.teamRank}`}
@@ -732,7 +738,7 @@ export function SquadTabPanel({
                   } · `
                 : ""}
               limit={stats.limit}
-              {stats.gameMode ? ` · gameMode=${stats.gameMode}` : ""} · 齐全场{" "}
+              {stats.gameMode ? ` · 模式=${gameModeLabel(stats.gameMode)}` : ""} · 齐全场{" "}
               {stats.sample.fullSquad} / 扫描 {stats.sample.scanned}
             </p>
             {stats.insights?.length ? (

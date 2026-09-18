@@ -32,6 +32,8 @@ export type RecentMatchRow = {
   mapName: string;
   mapLabel: string;
   gameMode: string;
+  matchType?: string;
+  isCustomMatch?: boolean;
   playedAt: string;
   durationSec: number;
   rank: number | null;
@@ -169,8 +171,8 @@ export async function getCachedMatch(
 ): Promise<{ value: PubgMatchDetail; cached: boolean }> {
   const key = `match:${platform}:${matchId}`;
   const hit = cacheGet<PubgMatchDetail>(key);
-  // 旧缓存可能缺 telemetryUrl 字段，强制重拉一次
-  if (hit && "telemetryUrl" in hit) {
+  // 旧缓存可能缺 telemetryUrl / matchType 字段，强制重拉一次补齐。
+  if (hit && "telemetryUrl" in hit && "matchType" in hit) {
     return { value: hit, cached: true };
   }
 
@@ -179,12 +181,22 @@ export async function getCachedMatch(
 
   const job = (async () => {
     const disk = await readPersistedMatch(matchId, platform);
-    if (disk) {
+    if (disk && "matchType" in disk) {
       cacheSet(key, disk, TTL.match);
       return { value: disk, cached: true };
     }
 
-    const value = await getMatchDetail(platform, matchId);
+    let value: PubgMatchDetail;
+    try {
+      value = await getMatchDetail(platform, matchId);
+    } catch (error) {
+      // 官方已无法获取的旧对局仍保留本地可读能力，只是不展示比赛类型。
+      if (disk) {
+        cacheSet(key, disk, TTL.match);
+        return { value: disk, cached: true };
+      }
+      throw error;
+    }
     cacheSet(key, value, TTL.match);
     try {
       await writePersistedMatch(value, platform);
@@ -223,6 +235,8 @@ function toRecentRow(
     mapName: match.mapName,
     mapLabel: mapLabel(match.mapName),
     gameMode: match.gameMode,
+    matchType: match.matchType,
+    isCustomMatch: match.isCustomMatch,
     playedAt: match.playedAt,
     durationSec: match.durationSec,
     rank: me?.winPlace ?? null,
@@ -240,6 +254,8 @@ function historyToRecentRow(m: HistoryMatchRecord): RecentMatchRow {
     mapName: m.mapName,
     mapLabel: m.mapLabel,
     gameMode: m.gameMode,
+    matchType: m.matchType,
+    isCustomMatch: m.isCustomMatch,
     playedAt: m.playedAt,
     durationSec: m.durationSec,
     rank: m.rank,
