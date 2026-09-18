@@ -52,7 +52,51 @@ export function MatchScoreboard({
                 {roster.teamRank == null ? "-" : `#${roster.teamRank}`}
               </span>
             </div>
-            <table className="min-w-full text-left text-sm">
+            <ul className="divide-y divide-border sm:hidden">
+              {roster.participants.map((p) => {
+                const isMe = Boolean(accountId && p.accountId === accountId);
+                return (
+                  <li
+                    key={`${roster.id}-${p.accountId ?? p.name}-card`}
+                    className={`space-y-2 px-3 py-3 ${isMe ? "bg-accent-muted" : ""}`}
+                  >
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <span className="min-w-0 truncate">{p.name}</span>
+                      {isMe ? (
+                        <span className="shrink-0 text-xs text-accent">我</span>
+                      ) : null}
+                    </div>
+                    <dl className="grid grid-cols-3 gap-2 text-xs text-fg-secondary">
+                      <div>
+                        <dt className="text-muted">击杀</dt>
+                        <dd className="font-mono tabular-nums text-fg">{p.kills}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted">助攻</dt>
+                        <dd className="font-mono tabular-nums text-fg">{p.assists}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted">伤害</dt>
+                        <dd className="font-mono tabular-nums text-fg">
+                          {formatNumber(p.damageDealt, 0)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted">存活</dt>
+                        <dd className="font-mono tabular-nums text-fg">
+                          {formatDuration(p.survivalTimeSec)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted">救援</dt>
+                        <dd className="font-mono tabular-nums text-fg">{p.revives}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                );
+              })}
+            </ul>
+            <table className="hidden min-w-full text-left text-sm sm:table">
               <thead className="text-muted">
                 <tr>
                   <th className="px-3 py-2 font-medium">玩家</th>

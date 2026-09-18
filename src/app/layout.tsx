@@ -1,4 +1,4 @@
-import type {Metadata} from "next";
+import type {Metadata, Viewport} from "next";
 import {IBM_Plex_Mono, IBM_Plex_Sans, Noto_Sans_SC} from "next/font/google";
 import {AppShell} from "@/components/app-shell";
 import "./globals.css";
@@ -27,6 +27,14 @@ const notoSansSc = Noto_Sans_SC({
 export const metadata: Metadata = {
   title: "PUBG Review",
   description: "PUBG 对局复盘与个人战绩分析台",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f1419",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -38,7 +38,7 @@ export default function HomePage() {
     <div className="flex min-h-full flex-col">
       <AppTopbar />
 
-      <main className="flex flex-1 flex-col items-center px-6 pb-12 pt-10 md:pt-12">
+      <main className="flex flex-1 flex-col items-center px-4 pb-[max(3rem,var(--safe-bottom))] pt-8 sm:px-6 md:pt-12">
         <section className="mb-8 flex w-full max-w-[44rem] flex-col items-center gap-4 text-center">
           <p className="text-xs font-medium uppercase tracking-[var(--tracking-label)] text-muted">
             Self-hosted · Match Review

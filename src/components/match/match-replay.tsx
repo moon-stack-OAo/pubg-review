@@ -1,6 +1,14 @@
 ﻿"use client";
 
-import {useCallback, useEffect, useMemo, useRef, useState,} from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
 import {formatDuration} from "@/lib/format";
 import {mapLabel, mapSizeCm} from "@/lib/pubg/maps";
 import type {
@@ -29,10 +37,25 @@ type Layers = {
 const GUNLINE_FADE_SEC = 2.5;
 /** 事件高亮时间窗（秒）：|e.t - curT| <= 此值 */
 const EVENT_HL_SEC = 1.0;
-/** 跟随视角固定缩放 */
+/** 跟随视角默认缩放 */
 const FOLLOW_ZOOM = 2;
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 5;
 
 const SPEEDS = [1, 2, 4] as const;
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function pinchDistance(
+  a: { clientX: number; clientY: number },
+  b: { clientX: number; clientY: number },
+) {
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
 
 function statusMessage(status: TelemetryStatus, err: string | null): string {
   if (status === "pending") return "遥测解析中，解析完成后即可回放";
@@ -128,6 +151,9 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     gunlines: true,
   });
   const [follow, setFollow] = useState(() => Boolean(accountId));
+  const [camZoom, setCamZoom] = useState(1);
+  const [camCX, setCamCX] = useState<number | null>(null);
+  const [camCY, setCamCY] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tRef = useRef(0);
@@ -141,6 +167,29 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     async () => undefined,
   );
   const appliedInitialKeyRef = useRef<string | null>(null);
+  const camZoomRef = useRef(1);
+  const camCXRef = useRef<number | null>(null);
+  const camCYRef = useRef<number | null>(null);
+  const followRef = useRef(follow);
+  const mapSizeRef = useRef(0);
+  const gestureRef = useRef<{
+    mode: "none" | "pan" | "pinch";
+    pointerId: number | null;
+    lastX: number;
+    lastY: number;
+    pinchStartDist: number;
+    pinchStartZoom: number;
+  }>({
+    mode: "none",
+    pointerId: null,
+    lastX: 0,
+    lastY: 0,
+    pinchStartDist: 0,
+    pinchStartZoom: 1,
+  });
+  const activePointersRef = useRef(
+    new Map<number, { clientX: number; clientY: number }>(),
+  );
 
   useEffect(() => {
     tRef.current = t;
@@ -151,6 +200,21 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   useEffect(() => {
     speedRef.current = speed;
   }, [speed]);
+  useEffect(() => {
+    camZoomRef.current = camZoom;
+  }, [camZoom]);
+  useEffect(() => {
+    camCXRef.current = camCX;
+  }, [camCX]);
+  useEffect(() => {
+    camCYRef.current = camCY;
+  }, [camCY]);
+  useEffect(() => {
+    followRef.current = follow;
+  }, [follow]);
+  useEffect(() => {
+    mapSizeRef.current = mapSizeCm(data?.mapName ?? "");
+  }, [data?.mapName]);
 
   const load = useCallback(async (opts?: { forceParse?: boolean }) => {
     setError("");
@@ -253,13 +317,13 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     const curT = tRef.current;
     const at = positionsAt(curT, byPlayer);
 
-    let zoom = 1;
-    let centerX = mapSize / 2;
-    let centerY = mapSize / 2;
+    let zoom = camZoom;
+    let centerX = camCX ?? mapSize / 2;
+    let centerY = camCY ?? mapSize / 2;
     if (follow && accountId) {
       const focusPos = at.get(accountId);
       if (focusPos) {
-        zoom = FOLLOW_ZOOM;
+        zoom = Math.max(camZoom, FOLLOW_ZOOM);
         centerX = focusPos.x;
         centerY = focusPos.y;
       }
@@ -376,11 +440,139 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         }
       }
     }
-  }, [data, mapSize, layers, accountId, byPlayer, follow]);
+  }, [data, mapSize, layers, accountId, byPlayer, follow, camZoom, camCX, camCY]);
 
   useEffect(() => {
     draw();
-  }, [draw, t, layers, follow]);
+  }, [draw, t, layers, follow, camZoom, camCX, camCY]);
+
+  const onCanvasPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      activePointersRef.current.set(e.pointerId, {
+        clientX: e.clientX,
+        clientY: e.clientY,
+      });
+      const pts = activePointersRef.current;
+      if (pts.size === 2) {
+        const [a, b] = Array.from(pts.values());
+        gestureRef.current = {
+          mode: "pinch",
+          pointerId: null,
+          lastX: 0,
+          lastY: 0,
+          pinchStartDist: pinchDistance(a, b),
+          pinchStartZoom: camZoomRef.current,
+        };
+        setFollow(false);
+        return;
+      }
+      if (pts.size === 1) {
+        gestureRef.current = {
+          mode: "pan",
+          pointerId: e.pointerId,
+          lastX: e.clientX,
+          lastY: e.clientY,
+          pinchStartDist: 0,
+          pinchStartZoom: camZoomRef.current,
+        };
+        canvas.setPointerCapture(e.pointerId);
+      }
+    },
+    [],
+  );
+
+  const onCanvasPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLCanvasElement>) => {
+      if (!activePointersRef.current.has(e.pointerId)) return;
+      activePointersRef.current.set(e.pointerId, {
+        clientX: e.clientX,
+        clientY: e.clientY,
+      });
+      const g = gestureRef.current;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const mapSz = mapSizeRef.current || 1;
+      const rect = canvas.getBoundingClientRect();
+      const cssSize = Math.min(rect.width, rect.height) - 16;
+      if (cssSize <= 0) return;
+
+      if (g.mode === "pinch" && activePointersRef.current.size >= 2) {
+        const [a, b] = Array.from(activePointersRef.current.values());
+        const dist = pinchDistance(a, b);
+        if (g.pinchStartDist > 0) {
+          const next = clamp(
+            g.pinchStartZoom * (dist / g.pinchStartDist),
+            ZOOM_MIN,
+            ZOOM_MAX,
+          );
+          camZoomRef.current = next;
+          setCamZoom(next);
+        }
+        return;
+      }
+
+      if (g.mode === "pan" && g.pointerId === e.pointerId) {
+        const dx = e.clientX - g.lastX;
+        const dy = e.clientY - g.lastY;
+        g.lastX = e.clientX;
+        g.lastY = e.clientY;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+        if (followRef.current) setFollow(false);
+        const zoom = camZoomRef.current;
+        const worldPerPx = mapSz / (cssSize * zoom);
+        const nextCX = clamp(
+          (camCXRef.current ?? mapSz / 2) - dx * worldPerPx,
+          0,
+          mapSz,
+        );
+        const nextCY = clamp(
+          (camCYRef.current ?? mapSz / 2) - dy * worldPerPx,
+          0,
+          mapSz,
+        );
+        camCXRef.current = nextCX;
+        camCYRef.current = nextCY;
+        setCamCX(nextCX);
+        setCamCY(nextCY);
+      }
+    },
+    [],
+  );
+
+  const endPointer = useCallback((e: ReactPointerEvent<HTMLCanvasElement>) => {
+    activePointersRef.current.delete(e.pointerId);
+    const canvas = canvasRef.current;
+    if (canvas?.hasPointerCapture(e.pointerId)) {
+      canvas.releasePointerCapture(e.pointerId);
+    }
+    if (activePointersRef.current.size < 2 && gestureRef.current.mode === "pinch") {
+      gestureRef.current.mode = "none";
+    }
+    if (activePointersRef.current.size === 0) {
+      gestureRef.current.mode = "none";
+      gestureRef.current.pointerId = null;
+    }
+  }, []);
+
+  const onCanvasWheel = useCallback((e: ReactWheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    const next = clamp(camZoomRef.current * factor, ZOOM_MIN, ZOOM_MAX);
+    camZoomRef.current = next;
+    setCamZoom(next);
+    if (followRef.current) setFollow(false);
+  }, []);
+
+  const resetCamera = useCallback(() => {
+    setCamZoom(1);
+    setCamCX(null);
+    setCamCY(null);
+    camZoomRef.current = 1;
+    camCXRef.current = null;
+    camCYRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (!playing) {
@@ -463,8 +655,13 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         ref={canvasRef}
         width={640}
         height={640}
-        aria-label="对局 2D 回放画布"
-        className="mx-auto max-h-[70vh] w-full max-w-xl rounded-lg border border-border bg-black"
+        aria-label="对局 2D 回放画布，可拖拽平移，双指捏合缩放"
+        className="mx-auto max-h-[min(70vh,100vw)] w-full max-w-xl touch-none rounded-lg border border-border bg-black"
+        onPointerDown={onCanvasPointerDown}
+        onPointerMove={onCanvasPointerMove}
+        onPointerUp={endPointer}
+        onPointerCancel={endPointer}
+        onWheel={onCanvasWheel}
       />
 
       <div className="mt-3 space-y-3">
@@ -472,7 +669,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
           <button
             type="button"
             onClick={() => setPlaying((p) => !p)}
-            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm hover:border-accent-border"
+            className="min-h-[var(--touch-min)] rounded-lg border border-border-strong px-3 py-1.5 text-sm hover:border-accent-border sm:min-h-0"
           >
             {playing ? "暂停" : "播放"}
           </button>
@@ -481,7 +678,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
               key={s}
               type="button"
               onClick={() => setSpeed(s)}
-              className={`rounded-md px-2 py-1 text-xs ${
+              className={`min-h-[var(--touch-min)] min-w-[2.5rem] rounded-md px-2 py-1 text-xs sm:min-h-0 ${
                 speed === s
                   ? "bg-accent-muted text-accent"
                   : "bg-surface-2 text-fg-secondary"
@@ -490,10 +687,22 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
               {s}x
             </button>
           ))}
+          <button
+            type="button"
+            onClick={resetCamera}
+            className="min-h-[var(--touch-min)] rounded-md border border-border px-2 py-1 text-xs text-fg-secondary hover:border-accent-border sm:min-h-0"
+            title="重置视角"
+          >
+            重置视角
+          </button>
           <span className="ml-auto font-mono text-xs text-fg-secondary">
             {formatDuration(Math.floor(t))} / {formatDuration(duration)}
+            <span className="ml-2 text-muted">{camZoom.toFixed(1)}x</span>
           </span>
         </div>
+        <p className="text-xs text-muted sm:hidden">
+          单指拖拽平移 · 双指捏合缩放 · 拖动时会关闭跟随
+        </p>
 
         <input
           type="range"
@@ -511,11 +720,19 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
 
         <div className="flex flex-wrap gap-3 text-xs text-fg-secondary">
           {accountId ? (
-            <label className="flex items-center gap-1.5">
+            <label className="flex min-h-[var(--touch-min)] items-center gap-1.5 sm:min-h-0">
               <input
                 type="checkbox"
                 checked={follow}
-                onChange={(e) => setFollow(e.target.checked)}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setFollow(on);
+                  if (on) {
+                    const z = Math.max(camZoomRef.current, FOLLOW_ZOOM);
+                    camZoomRef.current = z;
+                    setCamZoom(z);
+                  }
+                }}
               />
               跟随
             </label>

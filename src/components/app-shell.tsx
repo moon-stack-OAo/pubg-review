@@ -182,12 +182,18 @@ export function AppShell({children}: {children: ReactNode}) {
       </aside>
 
       <div className="flex min-h-dvh min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex h-[var(--header-height)] items-center justify-between border-b border-border bg-bg-elevated px-4 lg:hidden">
+        <header
+          className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg-elevated px-4 lg:hidden"
+          style={{
+            height: "calc(var(--header-height) + var(--safe-top))",
+            paddingTop: "var(--safe-top)",
+          }}
+        >
           <Brand />
           <button
             ref={menuButtonRef}
             type="button"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-border-strong bg-surface-2 text-fg hover:bg-surface-hover"
+            className="grid h-[var(--touch-min)] w-[var(--touch-min)] shrink-0 place-items-center rounded-md border border-border-strong bg-surface-2 text-fg hover:bg-surface-hover"
             aria-label="打开导航菜单"
             aria-controls="mobile-navigation"
             aria-expanded={drawerOpen}
@@ -217,11 +223,17 @@ export function AppShell({children}: {children: ReactNode}) {
             tabIndex={-1}
             className="relative flex h-full w-[min(19rem,86vw)] flex-col border-r border-border bg-bg-elevated shadow-[var(--shadow-lg)]"
           >
-            <div className="flex h-[var(--header-height)] items-center justify-between border-b border-border px-4">
+            <div
+              className="flex items-center justify-between border-b border-border px-4"
+              style={{
+                height: "calc(var(--header-height) + var(--safe-top))",
+                paddingTop: "var(--safe-top)",
+              }}
+            >
               <Brand />
               <button
                 type="button"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-fg-secondary hover:bg-surface-hover hover:text-fg"
+                className="grid h-[var(--touch-min)] w-[var(--touch-min)] shrink-0 place-items-center rounded-md text-fg-secondary hover:bg-surface-hover hover:text-fg"
                 aria-label="关闭导航菜单"
                 onClick={() => closeDrawer(true)}
               >

@@ -113,35 +113,40 @@ export function PlayerTabNav({
   ];
 
   return (
-    <div className="flex flex-wrap gap-1 border-b border-border">
-      {items.map((item) => {
-        const active = tab === item.id;
-        return (
-          <Link
-            key={item.id}
-            href={buildPlayerHref(platform, name, {
-              gameMode,
-              seasonId: item.id === "squad" ? undefined : seasonId,
-              tag: item.id === "overview" ? tag : undefined,
-              tab: item.id === "overview" ? undefined : item.id,
-              vs: item.id === "compare" ? vs : undefined,
-              mates: item.id === "squad" ? mates : undefined,
-              limit: item.id === "squad" ? limit : undefined,
-              hours: item.id === "squad" ? hours : undefined,
-              date: item.id === "squad" ? date : undefined,
-              tz: item.id === "squad" ? tz : undefined,
-            })}
-            aria-current={active ? "page" : undefined}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
-              active
-                ? "border-accent text-fg"
-                : "border-transparent text-muted hover:text-fg"
-            }`}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
+    <div className="-mx-4 border-b border-border md:mx-0">
+      <nav
+        aria-label="玩家页标签"
+        className="flex gap-1 overflow-x-auto overscroll-x-contain px-4 [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden"
+      >
+        {items.map((item) => {
+          const active = tab === item.id;
+          return (
+            <Link
+              key={item.id}
+              href={buildPlayerHref(platform, name, {
+                gameMode,
+                seasonId: item.id === "squad" ? undefined : seasonId,
+                tag: item.id === "overview" ? tag : undefined,
+                tab: item.id === "overview" ? undefined : item.id,
+                vs: item.id === "compare" ? vs : undefined,
+                mates: item.id === "squad" ? mates : undefined,
+                limit: item.id === "squad" ? limit : undefined,
+                hours: item.id === "squad" ? hours : undefined,
+                date: item.id === "squad" ? date : undefined,
+                tz: item.id === "squad" ? tz : undefined,
+              })}
+              aria-current={active ? "page" : undefined}
+              className={`-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors sm:px-4 ${
+                active
+                  ? "border-accent text-fg"
+                  : "border-transparent text-muted hover:text-fg"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

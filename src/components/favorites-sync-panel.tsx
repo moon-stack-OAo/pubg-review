@@ -195,8 +195,8 @@ export function FavoritesSyncPanel({
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        <div className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+          <table className="min-w-[28rem] w-full text-left text-sm">
             <thead className="text-muted">
               <tr>
                 <th className="px-2 py-2 font-medium">昵称</th>

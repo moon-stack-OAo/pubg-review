@@ -16,7 +16,7 @@ export function PageShell({
   return (
     <main
       className={cn(
-        "mx-auto flex w-full max-w-[var(--content-max)] flex-1 flex-col gap-6 px-4 py-8 md:px-6",
+        "mx-auto flex w-full max-w-[var(--content-max)] flex-1 flex-col gap-5 px-4 py-5 pb-[max(1.25rem,var(--safe-bottom))] md:gap-6 md:px-6 md:py-8",
         className,
       )}
     >
@@ -99,7 +99,7 @@ export function Kpi({
   return (
     <div
       className={cn(
-        "min-w-[var(--kpi-min)] rounded-lg border border-border bg-surface-2 p-3",
+        "min-w-0 w-full sm:min-w-[var(--kpi-min)] sm:w-auto rounded-lg border border-border bg-surface-2 p-3",
         className,
       )}
       title={hint}

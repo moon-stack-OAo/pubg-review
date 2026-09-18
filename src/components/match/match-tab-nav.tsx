@@ -58,56 +58,61 @@ export function MatchTabNav({
               : "";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border">
-      <nav className="flex flex-wrap gap-1">
-        {TABS.map((tab) => {
-          const q = new URLSearchParams(base);
-          if (tab.id !== "report") q.set("tab", tab.id);
-          const href = `/match/${matchId}?${q.toString()}`;
-          const isActive = active === tab.id;
-          const weaponsLocked = tab.id === "weapons" && !telemetryReady;
-          if (weaponsLocked) {
+    <div className="-mx-4 border-b border-border md:mx-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <nav
+          aria-label="对局页标签"
+          className="flex gap-1 overflow-x-auto overscroll-x-contain px-4 [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden"
+        >
+          {TABS.map((tab) => {
+            const q = new URLSearchParams(base);
+            if (tab.id !== "report") q.set("tab", tab.id);
+            const href = `/match/${matchId}?${q.toString()}`;
+            const isActive = active === tab.id;
+            const weaponsLocked = tab.id === "weapons" && !telemetryReady;
+            if (weaponsLocked) {
+              return (
+                <span
+                  key={tab.id}
+                  title="需遥测就绪后可用"
+                  className={`-mb-px shrink-0 cursor-not-allowed border-b-2 border-transparent px-3 py-2.5 text-sm text-muted opacity-60 sm:px-4 ${
+                    isActive ? "text-fg-secondary" : ""
+                  }`}
+                >
+                  {tab.label}
+                </span>
+              );
+            }
             return (
-              <span
+              <Link
                 key={tab.id}
-                title="需遥测就绪后可用"
-                className={`-mb-px cursor-not-allowed border-b-2 border-transparent px-4 py-2 text-sm text-muted opacity-60 ${
-                  isActive ? "text-fg-secondary" : ""
+                href={href}
+                aria-current={isActive ? "page" : undefined}
+                className={`-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors sm:px-4 ${
+                  isActive
+                    ? "border-accent text-fg"
+                    : "border-transparent text-muted hover:text-fg"
                 }`}
               >
                 {tab.label}
-              </span>
+              </Link>
             );
-          }
-          return (
-            <Link
-              key={tab.id}
-              href={href}
-              aria-current={isActive ? "page" : undefined}
-              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? "border-accent text-fg"
-                  : "border-transparent text-muted hover:text-fg"
-              }`}
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
-      {telemetryHint ? (
-        <span
-          className={`rounded-full border px-2 py-0.5 text-xs ${
-            telemetryStatus === "ready"
-              ? "border-success/40 bg-success-muted text-success"
-              : telemetryStatus === "pending"
-                ? "border-warning/40 bg-warning-muted text-warning"
-                : "border-border bg-surface-2 text-fg-secondary"
-          }`}
-        >
-          遥测：{telemetryHint}
-        </span>
-      ) : null}
+          })}
+        </nav>
+        {telemetryHint ? (
+          <span
+            className={`mx-4 shrink-0 self-start rounded-full border px-2 py-0.5 text-xs sm:mx-0 sm:self-auto ${
+              telemetryStatus === "ready"
+                ? "border-success/40 bg-success-muted text-success"
+                : telemetryStatus === "pending"
+                  ? "border-warning/40 bg-warning-muted text-warning"
+                  : "border-border bg-surface-2 text-fg-secondary"
+            }`}
+          >
+            遥测：{telemetryHint}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

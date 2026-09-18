@@ -129,12 +129,22 @@
   --header-height: 3.25rem;
   --content-max: 80rem;
   --kpi-min: 10.5rem;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 
   /* ——— Control sizes ——— */
   --control-h-sm: 2rem;
   --control-h-md: 2.25rem;
   --control-h-lg: 2.75rem;
   --touch-min: 2.75rem;
+}
+
+@media (max-width: 639px) {
+  :root {
+    --kpi-min: 0px;
+  }
 }
 
 /* ——— Tailwind 4 @theme 映射参考（迁入时使用） ———

@@ -108,10 +108,10 @@ export function PlayerHeadActions({
   }, [accountId, name, platform, refreshLoading, router, seasonId]);
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-2">
+    <div className="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:items-end">
       <label
         htmlFor={parseId}
-        className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-muted"
+        className="inline-flex min-h-[var(--touch-min)] cursor-pointer items-center gap-1.5 self-start whitespace-nowrap text-xs text-muted sm:min-h-0 sm:self-end"
         title="同步时顺带解析最近 3 场遥测（较慢）"
       >
         <input
@@ -125,17 +125,20 @@ export function PlayerHeadActions({
         <span>顺带解析遥测</span>
       </label>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <FavoriteButton
-          accountId={accountId}
-          platform={platform}
-          name={name}
-        />
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+        <div className="col-span-2 sm:col-span-1 sm:contents">
+          <FavoriteButton
+            accountId={accountId}
+            platform={platform}
+            name={name}
+          />
+        </div>
         <Button
           type="button"
           variant="secondary"
           onClick={onSync}
           disabled={syncLoading}
+          className="min-h-[var(--touch-min)] sm:min-h-0"
           title="将官方近况对局写入本地历史库（90s 冷却）"
         >
           {syncLoading
@@ -149,13 +152,14 @@ export function PlayerHeadActions({
           variant="primary"
           onClick={onRefresh}
           disabled={refreshLoading}
+          className="min-h-[var(--touch-min)] sm:min-h-0"
         >
           {refreshLoading ? "刷新中…" : "刷新"}
         </Button>
       </div>
 
       {hint ? (
-        <p className="max-w-md text-right text-xs leading-snug text-muted">
+        <p className="max-w-md text-left text-xs leading-snug text-muted sm:text-right">
           {hint}
         </p>
       ) : null}
