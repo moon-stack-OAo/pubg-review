@@ -35,6 +35,10 @@ export function PageShell({
         <Link href="/maps" className="text-accent hover:underline">
           地图中心
         </Link>
+        {" · "}
+        <Link href="/weapons" className="text-accent hover:underline">
+          武器库
+        </Link>
       </footer>
     </main>
   );
