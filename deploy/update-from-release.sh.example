@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# 从 GitHub Release 拉取 standalone 包并热更新（PM2 reload）
+#
+# 安装（服务器一次性）：
+#   sudo mkdir -p /opt/pubg-review-scripts
+#   sudo cp update-from-release.sh.example /opt/pubg-review-scripts/update-from-release.sh
+#   sudo chmod +x /opt/pubg-review-scripts/update-from-release.sh
+#   # 编辑下方默认变量，或用环境变量覆盖
+#
+# 用法：
+#   update-from-release.sh              # 最新 Release
+#   update-from-release.sh v0.2.0       # 指定 tag
+#
+# 私有仓库需：export GH_TOKEN=github_pat_...（classic 或 fine-grained，至少 contents:read）
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/pubg-review}"
+REPO="${REPO:-moon-stack-OAo/pubg-review}"
+PM2_NAME="${PM2_NAME:-pubg-review}"
+TAG="${1:-}"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "缺少命令: $1" >&2; exit 1; }; }
+need curl
+need tar
+need sha256sum
+
+if [[ ! -d "$APP_DIR" ]]; then
+  echo "APP_DIR 不存在: $APP_DIR（请先按 deploy/README 完成首次部署）" >&2
+  exit 1
+fi
+
+AUTH=()
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  AUTH=(-H "Authorization: Bearer ${GH_TOKEN}")
+fi
+
+api() {
+  local url="$1"
+  curl -fsSL "${AUTH[@]}" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "$url"
+}
+
+if [[ -z "$TAG" ]]; then
+  TAG="$(api "https://api.github.com/repos/${REPO}/releases/latest" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name") or "")')"
+fi
+if [[ -z "$TAG" ]]; then
+  echo "无法解析最新 Release tag（私有仓请设置 GH_TOKEN）" >&2
+  exit 1
+fi
+
+ASSET_NAME="pubg-review-${TAG}-standalone.tar.gz"
+SUM_NAME="pubg-review-${TAG}-standalone.sha256"
+RELEASE_JSON="$(api "https://api.github.com/repos/${REPO}/releases/tags/${TAG}")"
+
+asset_url() {
+  local name="$1"
+  printf '%s\n' "$RELEASE_JSON" | python3 -c "
+import json,sys
+name=sys.argv[1]
+data=json.load(sys.stdin)
+for a in data.get('assets',[]):
+  if a.get('name')==name:
+    print(a.get('url') or '')
+    break
+" "$name"
+}
+
+TAR_API_URL="$(asset_url "$ASSET_NAME")"
+SUM_API_URL="$(asset_url "$SUM_NAME")"
+if [[ -z "$TAR_API_URL" ]]; then
+  echo "Release ${TAG} 未找到资产 ${ASSET_NAME}" >&2
+  exit 1
+fi
+
+WORKDIR="$(mktemp -d)"
+trap 'rm -rf "$WORKDIR"' EXIT
+cd "$WORKDIR"
+
+download_asset() {
+  local api_url="$1" out="$2"
+  curl -fsSL "${AUTH[@]}" \
+    -H "Accept: application/octet-stream" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -o "$out" \
+    "$api_url"
+}
+
+echo "下载 ${ASSET_NAME} ..."
+download_asset "$TAR_API_URL" "$ASSET_NAME"
+if [[ -n "$SUM_API_URL" ]]; then
+  download_asset "$SUM_API_URL" "$SUM_NAME"
+  echo "校验 sha256 ..."
+  sha256sum -c "$SUM_NAME"
+else
+  echo "警告: 无 ${SUM_NAME}，跳过校验" >&2
+fi
+
+STAGE="${APP_DIR}.next-${TAG}"
+BACKUP="${APP_DIR}.prev"
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+tar -xzf "$ASSET_NAME" -C "$STAGE" --strip-components=1
+
+# 保留运行态
+if [[ -d "${APP_DIR}/.data" ]]; then
+  rm -rf "${STAGE}/.data"
+  cp -a "${APP_DIR}/.data" "${STAGE}/.data"
+else
+  mkdir -p "${STAGE}/.data"
+fi
+if [[ -f "${APP_DIR}/.env.production" ]]; then
+  cp -a "${APP_DIR}/.env.production" "${STAGE}/.env.production"
+fi
+
+# 原子切换：当前 → .prev，新包 → APP_DIR
+rm -rf "$BACKUP"
+if [[ -d "$APP_DIR" ]]; then
+  mv "$APP_DIR" "$BACKUP"
+fi
+mv "$STAGE" "$APP_DIR"
+
+echo "${TAG}" > "${APP_DIR}/VERSION"
+
+# 目录已整体替换，必须用新 cwd 重新 start（reload 可能仍指向旧路径）
+if command -v pm2 >/dev/null 2>&1; then
+  pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
+  (
+    cd "$APP_DIR"
+    HOSTNAME=0.0.0.0 PORT=3000 pm2 start server.js --name "$PM2_NAME"
+  )
+  pm2 save || true
+else
+  echo "未安装 pm2：请手动在 ${APP_DIR} 执行 node server.js" >&2
+fi
+
+echo "已更新到 ${TAG} → ${APP_DIR}（上一版备份: ${BACKUP}）"
+curl -fsS "http://127.0.0.1:3000/" -o /dev/null -w "冒烟 HTTP %{http_code}\n" || {
+  echo "冒烟失败，可回滚:" >&2
+  echo "  pm2 delete ${PM2_NAME} || true" >&2
+  echo "  rm -rf ${APP_DIR} && mv ${BACKUP} ${APP_DIR}" >&2
+  echo "  cd ${APP_DIR} && HOSTNAME=0.0.0.0 PORT=3000 pm2 start server.js --name ${PM2_NAME}" >&2
+  exit 1
+}

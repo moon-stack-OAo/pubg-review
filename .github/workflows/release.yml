@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build (standalone)
+        run: npm run build
+
+      - name: Pack archive
+        run: npm run pack:archive
+
+      - name: Rename asset
+        id: asset
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          SRC="dist/pubg-review-standalone.tar.gz"
+          DEST="dist/pubg-review-${TAG}-standalone.tar.gz"
+          test -f "$SRC"
+          mv "$SRC" "$DEST"
+          echo "path=${DEST}" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$DEST")" >> "$GITHUB_OUTPUT"
+          sha256sum "$DEST" | tee "dist/pubg-review-${TAG}-standalone.sha256"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="$(mktemp)"
+          {
+            echo "## ${TAG}"
+            echo
+            echo "Standalone 运行包（Linux x64 Node）。服务器更新见 \`deploy/README.md\` §C。"
+            echo
+            echo '```bash'
+            echo "# 示例（需 gh 或 curl + 公开/私有 token）"
+            echo "sudo /opt/pubg-review-scripts/update-from-release.sh ${TAG}"
+            echo '```'
+            echo
+            if [ -f CHANGELOG.md ]; then
+              echo "### Changelog"
+              echo
+              # 截取 Unreleased 下到下一 ## 之前的粗略片段（发版前建议先整理 CHANGELOG）
+              awk '/^## \[Unreleased\]/{p=1;next} /^## \[/{if(p)exit} p' CHANGELOG.md || true
+            fi
+          } > "$NOTES"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file "$NOTES" \
+            "${{ steps.asset.outputs.path }}" \
+            "dist/pubg-review-${TAG}-standalone.sha256"

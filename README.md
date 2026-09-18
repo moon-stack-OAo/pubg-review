@@ -69,12 +69,14 @@ npm run lint
 
 ## 生产部署
 
-见 [`deploy/README.md`](deploy/README.md)（PM2、`ecosystem.config.cjs`、Nginx、备份与 SLA）。
+见 [`deploy/README.md`](deploy/README.md)（源码构建 / **standalone 打包**、PM2、Nginx、备份与 SLA）。
 
 要点：
 
 - Node 20+，**必须单进程**（禁止 PM2 cluster / 多实例）
 - 持久化依赖 `.data/`；进程内缓存与限流，重启会丢内存态
+- 推荐：`npm run build && npm run pack` → 拷贝 `dist/pubg-review` 到服务器跑 `node server.js`
+- 自动更新：打 `v*` tag → GitHub Release 产物 → 服务器 `update-from-release.sh`（见 `deploy/README.md` §C）
 - Nginx 反代 HTTPS；MCP 地址为 `https://域名/mcp`
 
 ## Remote MCP

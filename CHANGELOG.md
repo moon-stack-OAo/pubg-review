@@ -8,7 +8,13 @@
 
 ### Added
 
+- Standalone 打包部署：`output: "standalone"`、`npm run pack` / `pack:archive`、`deploy/pack.mjs`
+- Tag 发版：`.github/workflows/release.yml`（`v*` → GitHub Release 上传 standalone tar + sha256）
+- CI：`.github/workflows/ci.yml`（main 上 lint + build + pack 冒烟）
+- 服务器热更新脚本示例：`deploy/update-from-release.sh.example`（拉 Release、保留 `.data`、PM2 重启）
 - 规划文档：`docs/06-缺口补充-AI与地图.md`（可选 LLM、api-assets 底图、载具/船/POI 缺口与迭代）
+- 功能缺口总览：`docs/07-功能缺口.md`
+- 多 API Key：`PUBG_API_KEYS`（逗号或 JSON 数组）轮询，遇 429 切换
 - Remote MCP Tools 扩展至 13 个（直接复用服务层）：
     - `get_player_form` — 近况 formStatus + 异常 anomalies
     - `get_player_analysis` — 近 N 场报告聚合（雷达 / 弱点 / 建议）
