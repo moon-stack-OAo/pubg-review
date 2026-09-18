@@ -8,6 +8,21 @@
 
 ### Added
 
+- 移动端专项方案 A：`viewport` / safe-area、触控目标、玩家/对局 Tab 横滑、积分板小屏卡片化；回放单指拖拽 / 双指捏合 / 滚轮缩放与重置视角（不含底部 Tab 壳）
+- 地图中心：`/maps` 目录与 `/maps/[mapId]` 详情；侧栏「地图」入口；`public/maps/*` 底图资源
+- 全局侧栏导航壳（`AppShell`）：桌面固定侧栏、小屏抽屉菜单
+
+### Changed
+
+- 地图名、对局模式等展示文案中文化（UI / 分享 / 回放等统一走标签映射）
+- 收藏页「同步近况」结果提示改为单独一行，不再挤在操作按钮列
+- 移除未再引用的 `SyncHistoryButton` / `RefreshButton`（已由 `PlayerHeadActions` 承接）
+- 文档：移动端专项自暂缓改为方案 A 已完成（`docs/07`、半成品清单、PRD 验收勾选）
+
+## [0.1.0] - 2026-09-18
+
+### Added
+
 - Standalone 打包部署：`output: "standalone"`、`npm run pack` / `pack:archive`、`deploy/pack.mjs`
 - Tag 发版：`.github/workflows/release.yml`（`v*` → GitHub Release 上传 standalone tar + sha256）
 - CI：`.github/workflows/ci.yml`（main 上 lint + build + pack 冒烟）
@@ -39,8 +54,6 @@
 
 ### Changed
 
-- 收藏页「同步近况」结果提示改为单独一行，不再挤在操作按钮列
-- 移除未再引用的 `SyncHistoryButton` / `RefreshButton`（已由 `PlayerHeadActions` 承接）
 - Remote MCP **默认关闭**；未显式开启时 `/mcp` 返回 404
 - `npm start` 固定监听 `0.0.0.0:3000`
 - README 重写：按「快速开始 / 功能 / 路由 / 部署 / MCP / API / 数据与缓存 / 限流」重组，去掉半成品 backlog 口吻
@@ -52,3 +65,7 @@
 
 - 开启 MCP 后强制校验 Bearer Token（未配置 `MCP_TOKEN` → `503`，错误 / 缺失 → `401`）
 - 公网部署仍建议配合防火墙限 IP；勿将 Token 写入仓库
+
+[Unreleased]: https://github.com/moon-stack-OAo/pubg-review/compare/v0.1.0...HEAD
+
+[0.1.0]: https://github.com/moon-stack-OAo/pubg-review/releases/tag/v0.1.0
