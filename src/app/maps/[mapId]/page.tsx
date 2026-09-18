@@ -2,7 +2,9 @@ import type {Metadata} from "next";
 import Image from "next/image";
 import Link from "next/link";
 import {notFound} from "next/navigation";
+import {MapPoiViewer} from "@/components/maps/map-poi-viewer";
 import {AppTopbar, Chip, PageShell, buttonClass} from "@/components/ui";
+import {hasMapPois, listPoisByMapId} from "@/lib/pubg/map-pois";
 import {getMapById, listMaps, mapSizeLabel} from "@/lib/pubg/maps";
 
 type Props = {
@@ -28,6 +30,9 @@ export default async function MapDetailPage({params}: Props) {
   const map = getMapById(mapId);
   if (!map) notFound();
 
+  const pois = listPoisByMapId(map.id);
+  const showPoiViewer = hasMapPois(map.id);
+
   return (
     <div className="flex min-h-full flex-col">
       <AppTopbar
@@ -43,7 +48,9 @@ export default async function MapDetailPage({params}: Props) {
           <Link href="/maps" className="hover:text-fg">
             地图中心
           </Link>
-          <span aria-hidden className="mx-2">/</span>
+          <span aria-hidden className="mx-2">
+            /
+          </span>
           <span aria-current="page">{map.name}</span>
         </nav>
 
@@ -59,27 +66,37 @@ export default async function MapDetailPage({params}: Props) {
         </header>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <figure className="overflow-hidden rounded-lg border border-border bg-black shadow-[var(--shadow-md)]">
-            <Image
-              src={map.image}
-              alt={`${map.name}官方地图底图`}
-              width={1024}
-              height={1024}
-              priority
-              className="aspect-square h-auto w-full object-cover"
+          {showPoiViewer ? (
+            <MapPoiViewer
+              mapName={map.name}
+              image={map.image}
+              assetFile={map.assetFile}
+              sizeCm={map.sizeCm}
+              pois={pois}
             />
-            <figcaption className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3 text-xs text-muted">
-              <span>{map.assetFile}</span>
-              <a
-                href={`https://github.com/pubg/api-assets/blob/master/Assets/Maps/${map.assetFile}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-accent hover:underline"
-              >
-                查看官方资源
-              </a>
-            </figcaption>
-          </figure>
+          ) : (
+            <figure className="overflow-hidden rounded-lg border border-border bg-black shadow-[var(--shadow-md)]">
+              <Image
+                src={map.image}
+                alt={`${map.name}官方地图底图`}
+                width={1024}
+                height={1024}
+                priority
+                className="aspect-square h-auto w-full object-cover"
+              />
+              <figcaption className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3 text-xs text-muted">
+                <span>{map.assetFile}</span>
+                <a
+                  href={`https://github.com/pubg/api-assets/blob/master/Assets/Maps/${map.assetFile}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  查看官方资源
+                </a>
+              </figcaption>
+            </figure>
+          )}
 
           <aside className="space-y-5 border-l border-border pl-5 max-lg:border-l-0 max-lg:border-t max-lg:pl-0 max-lg:pt-5">
             <section>
@@ -97,6 +114,12 @@ export default async function MapDetailPage({params}: Props) {
                   <dt className="text-muted">资源规格</dt>
                   <dd className="text-fg">Low Res</dd>
                 </div>
+                {showPoiViewer ? (
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-muted">POI 样板</dt>
+                    <dd className="font-mono text-fg">{pois.length}</dd>
+                  </div>
+                ) : null}
               </dl>
             </section>
 
@@ -114,8 +137,16 @@ export default async function MapDetailPage({params}: Props) {
               </div>
             </section>
 
+            {showPoiViewer ? (
+              <section className="border-t border-border pt-5 text-xs leading-relaxed text-muted">
+                建筑 / 院落 / 地堡入口均为自维护或社区清单 POI
+                近似，官方遥测无稳定「房间 ID」，不做逐房间密室还原。
+              </section>
+            ) : null}
+
             <section className="border-t border-border pt-5 text-xs leading-relaxed text-muted">
-              地图资源来自 PUBG API Assets，使用须遵循 PUBG Terms of Use 与 Player-created Content 条款。
+              地图资源来自 PUBG API Assets，使用须遵循 PUBG Terms of Use 与
+              Player-created Content 条款。
             </section>
           </aside>
         </div>
