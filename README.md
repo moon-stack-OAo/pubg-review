@@ -23,6 +23,11 @@ cp .env.example .env.local
 | `TRUST_PROXY`             | 否          | 是否信任 `X-Forwarded-For`，默认 `false`                                         |
 | `MCP_ENABLED`             | 否          | Remote MCP 开关，默认关闭                                                        |
 | `MCP_TOKEN`               | 开启 MCP 时必填 | Bearer Token                                                              |
+| `AI_ANALYSIS_ENABLED`     | 否          | 可选 LLM 解读开关，默认关闭；无 Key 时行为与现网一致                                         |
+| `AI_API_KEY`              | 开启 AI 时建议填 | 模型网关 Key（仅服务端）；OpenAI-compatible                                         |
+| `AI_BASE_URL`             | 否          | 网关根路径，默认 `https://api.openai.com/v1`                                      |
+| `AI_MODEL`                | 否          | 模型名，默认 `gpt-4o-mini`                                                      |
+| `AI_RATE_LIMIT_RPM`       | 否          | 进程内 AI 外呼 RPM，默认 `6`（与官方 PUBG 限额无关）                                      |
 
 > 真实 Key / Token 不要提交 Git，也不要写进前端代码。
 
@@ -45,7 +50,7 @@ npm run lint
 | 能力         | 说明                                           |
 |------------|----------------------------------------------|
 | 搜索 / 玩家概览  | 多平台昵称搜索；赛季 KPI、近况卡、弱点标签、14 天趋势、封禁状态          |
-| 对局复盘       | 报告（无遥测可降级 / 有遥测可增强）、积分板 CSV、事件轴、2D 回放（`?t=`） |
+| 对局复盘       | 报告（无遥测可降级 / 有遥测可增强）、可选 AI 人话解读（默认关）、积分板 CSV、事件轴、2D 回放（`?t=`） |
 | 武器 / 地图    | 本地历史聚合；完整武器明细依赖已 parse 的 telemetry           |
 | 对比 / 车队    | 两人 KPI + 近况并排；四人齐全同场统计与常一起队友建议               |
 | 本地历史库      | dashboard /「同步近况」落盘；官方约 14 天列表外可保留摘要         |
@@ -218,20 +223,20 @@ curl "http://127.0.0.1:3000/api/v1/squad/stats?platform=steam&name=Nick&mates=A,
 
 ### 提额检查清单（尚未提额）
 
-完整材料见本地 `docs/05-API提额申请材料.md`（若存在）。**勿伪造已提额 / 已公网 Demo**；正式提交须人工登录 developer.pubg.com。
+完整材料与**上线前勾选清单**见本地 `docs/05-API提额申请材料.md` §8。**勿伪造已提额 / 已公网 Demo**。
 
 - [x] 网关限流（`RATE_LIMIT_RPM` + proxy）
 - [x] 提额材料（产品 / 缓存 / 请求模式 / 合规 / Demo 占位）
-- [ ] Demo 可公网访问（替换材料中的 URL 占位后再勾）
-- [ ] 在 developer.pubg.com 提交「I NEED A HIGHER LIMIT」
+- [x] **G-01** Demo 可公网访问：`https://pubg.livancen.top`
+- [ ] **G-02** 你本人在 developer.pubg.com 提交「I NEED A HIGHER LIMIT」（G-01 已可访问，现可提交）
 - [ ] 上线后仍保留网关限流与本地缓存（进程内；Redis 暂缓）
 
 ## 里程碑与边界
 
 已落地（务实版）：M1 查询站 → M2 无遥测报告 / 弱点 / 收藏 → M3 遥测 + 事件轴 + 2D 回放 → M4 历史库 / 武器地图对比 / CSV → 车队同场统计 → `.data` 落盘与部署材料。
 
-**明确暂缓**：完整 OAuth / 多租户、MySQL 替换 `.data`、Redis 多实例、非 api-assets 贴图来源、逐房间密室、移动端专项、四平台同等验收（优先保证 steam）。
+**明确暂缓**：完整 OAuth / 多租户、MySQL 替换 `.data`、Redis 多实例、非 api-assets 贴图来源、逐房间密室、四平台同等验收（优先保证 steam）。移动端主路径响应式已落地（非独立 App 壳）。
 
-下一专题（AI 可选增强 / 官方地图底图 / 载具图层）规划见本地 `docs/06-缺口补充-AI与地图.md`（`docs/` 默认 gitignore）。
+下一专题（可选 AI、载具图层、POI 等；官方 api-assets 底图已落地）规划见本地 `docs/06-缺口补充-AI与地图.md`（`docs/` 默认 gitignore）。
 
 变更记录见 [`CHANGELOG.md`](CHANGELOG.md)。

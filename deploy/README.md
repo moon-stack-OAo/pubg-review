@@ -317,7 +317,7 @@ du -sh /opt/pubg-review/.data/* 2>/dev/null | sort -h
 | 官方限额    | 默认约 **~10 RPM**（Key）；调高本站 `RATE_LIMIT_RPM` **不会**提高官方额度     |
 | 可用性预期   | 自托管尽力而为；无多机故障转移、无共享限流                                       |
 
-与提额关系：材料见 `docs/05-API提额申请材料.md`；**未公网 Demo、未在 developer.pubg.com 人工提交前，不得视为已提额**。即便日后获批，仍应保留网关限流与本地缓存。
+与提额关系：材料与**上线前勾选清单**见 `docs/05-API提额申请材料.md` §8。**G-01** Demo：`https://pubg.livancen.top`；**G-02** 须人工登录 developer.pubg.com 提交。未完成前不得视为已提额；即便日后获批，仍应保留网关限流与本地缓存。
 
 ## 安全注意
 

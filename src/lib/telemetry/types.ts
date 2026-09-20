@@ -10,7 +10,28 @@ export type TelemetryEventType =
   | "knock"
   | "revive"
   | "carePackage"
-  | "zone";
+  | "zone"
+  | "vehicleRide"
+  | "vehicleLeave"
+  | "vehicleDestroy";
+
+/** 载具分类：船 / 陆 / 空 / 其他 */
+export type TelemetryVehicleKind = "land" | "water" | "air" | "other";
+
+/** 载具生命周期事件（上车 / 下车 / 摧毁） */
+export type TelemetryVehicleEvent = {
+  t: number;
+  type: "ride" | "leave" | "destroy";
+  vehicleId: string;
+  vehicleUniqueId: number;
+  kind: TelemetryVehicleKind;
+  label: string;
+  accountId?: string | null;
+  x: number;
+  y: number;
+  z?: number;
+  seatIndex?: number | null;
+};
 
 export type TelemetryPlayer = {
   accountId: string;
@@ -71,6 +92,8 @@ export type ParsedTelemetry = {
   events: TelemetryEvent[];
   zones: TelemetryZone[];
   gunlines: TelemetryGunline[];
+  /** parser ≥ 1.2.0：载具上车/下车/摧毁 */
+  vehicles: TelemetryVehicleEvent[];
 };
 
 export type TelemetryAssetMeta = {
@@ -88,7 +111,7 @@ export type TelemetryAssetMeta = {
   durationSec?: number | null;
 };
 
-export const PARSER_VERSION = "1.1.0";
+export const PARSER_VERSION = "1.2.0";
 
 export const DEFAULT_SAMPLE_HZ = 1;
 
@@ -108,4 +131,5 @@ export type TelemetryEventsPayload = {
   positions: TelemetryPosition[];
   events: TelemetryEvent[];
   gunlines: TelemetryGunline[];
+  vehicles: TelemetryVehicleEvent[];
 };

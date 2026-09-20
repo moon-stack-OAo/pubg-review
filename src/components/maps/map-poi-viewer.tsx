@@ -35,7 +35,7 @@ const KIND_BOUNDS: Record<MapPoiKind, string> = {
   vehicle_zone: "border-success/35 bg-success/10",
 };
 
-/** 与 match-replay toCanvas 同约定：x→水平、y→垂直向下，无翻转 */
+/** 与 map-coords / match-replay 同约定：x→水平、y→垂直向下，无翻转 */
 function toPercent(value: number, sizeCm: number): number {
   return (value / sizeCm) * 100;
 }

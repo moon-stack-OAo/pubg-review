@@ -8,12 +8,14 @@
 
 ### Added
 
+- 遥测载具解析与回放图层（B1–B3）：`LogVehicleRide/Leave/Destroy` → `vehicles[]`；船/车中文名（`vehicles.ts`）；回放开关「载具」
 - 移动端专项方案 A：`viewport` / safe-area、触控目标、玩家/对局 Tab 横滑、积分板小屏卡片化；回放单指拖拽 / 双指捏合 / 滚轮缩放与重置视角（不含底部 Tab 壳）
 - 地图中心：`/maps` 目录与 `/maps/[mapId]` 详情；侧栏「地图」入口；`public/maps/*` 底图资源
 - 全局侧栏导航壳（`AppShell`）：桌面固定侧栏、小屏抽屉菜单
 
 ### Changed
 
+- `parserVersion` → **1.2.0**（含载具）；旧 `events.json` 无 `vehicles` 时自动用 raw 重 parse
 - 地图名、对局模式等展示文案中文化（UI / 分享 / 回放等统一走标签映射）
 - 收藏页「同步近况」结果提示改为单独一行，不再挤在操作按钮列
 - 移除未再引用的 `SyncHistoryButton` / `RefreshButton`（已由 `PlayerHeadActions` 承接）

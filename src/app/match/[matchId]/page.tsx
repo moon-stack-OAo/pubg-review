@@ -5,9 +5,11 @@ import {MatchReplay} from "@/components/match/match-replay";
 import {MatchTabNav, parseMatchTab,} from "@/components/match/match-tab-nav";
 import {MatchTimeline} from "@/components/match/match-timeline";
 import {MatchWeaponsPanel} from "@/components/match/match-weapons";
+import {MatchAiExplain} from "@/components/match-ai-explain";
 import {MatchReportCard} from "@/components/match-report-card";
 import {MatchScoreboard} from "@/components/match-scoreboard";
 import {AppTopbar, Card, ErrorBox, GameModeChips, PageShell, buttonClass} from "@/components/ui";
+import {shouldShowAiUi} from "@/lib/ai/service";
 import {buildMatchReport} from "@/lib/analysis/report-service";
 import {formatDateTime, formatDuration, formatNumber, rankClass,} from "@/lib/format";
 import {friendlyErrorMessage} from "@/lib/errors";
@@ -182,12 +184,23 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
           {tab === "report" && (
             <>
               {report ? (
-                <MatchReportCard
-                  report={report}
-                  cached={reportCached}
-                  telemetryStatus={telemetryStatus}
-                  platform={platform}
-                />
+                <>
+                  <MatchReportCard
+                    report={report}
+                    cached={reportCached}
+                    telemetryStatus={telemetryStatus}
+                    platform={platform}
+                  />
+                  {shouldShowAiUi() && accountId ? (
+                    <MatchAiExplain
+                      matchId={matchId}
+                      platform={platform}
+                      accountId={accountId}
+                      ruleSummaryLines={report.summaryLines}
+                      ruleSuggestions={report.suggestions}
+                    />
+                  ) : null}
+                </>
               ) : accountId ? (
                 reportError ? (
                   <Card className="border-border">

@@ -10,6 +10,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import {formatDuration} from "@/lib/format";
+import {telemetryToCanvas} from "@/lib/pubg/map-coords";
 import {getMapByApiName, mapLabel, mapSizeCm} from "@/lib/pubg/maps";
 import type {
     TelemetryEvent,
@@ -17,6 +18,7 @@ import type {
     TelemetryGunline,
     TelemetryPosition,
     TelemetryStatus,
+    TelemetryVehicleEvent,
     TelemetryZone,
 } from "@/lib/telemetry/types";
 
@@ -34,6 +36,7 @@ type Layers = {
   gunlines: boolean;
   carePackages: boolean;
   deaths: boolean;
+  vehicles: boolean;
 };
 
 /** 枪线淡出窗口（秒）：仅绘制 [t-FADE, t] 内线段 */
@@ -233,6 +236,196 @@ function drawDeathMarks(
   }
 }
 
+type VehicleSeg = {
+  uniqueId: number;
+  kind: TelemetryVehicleEvent["kind"];
+  label: string;
+  accountId: string | null;
+  t0: number;
+  t1: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  destroyedAt: number | null;
+};
+
+/** 按 vehicleUniqueId 拼出载具行程（轨迹点用玩家 positions 在 [t0,t1] 补全） */
+function buildVehicleSegs(events: TelemetryVehicleEvent[]): VehicleSeg[] {
+  type Open = {
+    uniqueId: number;
+    kind: TelemetryVehicleEvent["kind"];
+    label: string;
+    accountId: string | null;
+    t0: number;
+    x0: number;
+    y0: number;
+  };
+  const open = new Map<string, Open>();
+  const done: VehicleSeg[] = [];
+  const destroyed = new Map<number, number>();
+
+  const keyOf = (e: TelemetryVehicleEvent) =>
+    e.vehicleUniqueId > 0
+      ? `u:${e.vehicleUniqueId}:${e.accountId ?? ""}`
+      : `a:${e.accountId ?? ""}:${e.vehicleId}`;
+
+  for (const e of events) {
+    if (e.type === "destroy") {
+      destroyed.set(e.vehicleUniqueId, e.t);
+      continue;
+    }
+    const key = keyOf(e);
+    if (e.type === "ride") {
+      open.set(key, {
+        uniqueId: e.vehicleUniqueId,
+        kind: e.kind,
+        label: e.label,
+        accountId: e.accountId ?? null,
+        t0: e.t,
+        x0: e.x,
+        y0: e.y,
+      });
+    } else if (e.type === "leave") {
+      const seg = open.get(key);
+      if (seg) {
+        done.push({
+          ...seg,
+          t1: e.t,
+          x1: e.x,
+          y1: e.y,
+          destroyedAt: destroyed.get(seg.uniqueId) ?? null,
+        });
+        open.delete(key);
+      } else {
+        done.push({
+          uniqueId: e.vehicleUniqueId,
+          kind: e.kind,
+          label: e.label,
+          accountId: e.accountId ?? null,
+          t0: e.t,
+          t1: e.t,
+          x0: e.x,
+          y0: e.y,
+          x1: e.x,
+          y1: e.y,
+          destroyedAt: destroyed.get(e.vehicleUniqueId) ?? null,
+        });
+      }
+    }
+  }
+  for (const seg of open.values()) {
+    done.push({
+      ...seg,
+      t1: Number.POSITIVE_INFINITY,
+      x1: seg.x0,
+      y1: seg.y0,
+      destroyedAt: destroyed.get(seg.uniqueId) ?? null,
+    });
+  }
+  return done;
+}
+
+function vehicleStroke(kind: TelemetryVehicleEvent["kind"], focus: boolean): string {
+  if (kind === "water") {
+    return focus ? "rgba(34,211,238,0.75)" : "rgba(34,211,238,0.4)";
+  }
+  if (kind === "air") {
+    return focus ? "rgba(167,139,250,0.7)" : "rgba(167,139,250,0.35)";
+  }
+  return focus ? "rgba(74,222,128,0.7)" : "rgba(74,222,128,0.35)";
+}
+
+/** 载具轨迹 + 当前点；船用三角、车用方块、摧毁打叉 */
+function drawVehicles(
+  ctx: CanvasRenderingContext2D,
+  segs: VehicleSeg[],
+  events: TelemetryVehicleEvent[],
+  byPlayer: Map<string, TelemetryPosition[]>,
+  curT: number,
+  toCanvas: (x: number, y: number) => { cx: number; cy: number },
+  focusId?: string,
+) {
+  for (const seg of segs) {
+    if (seg.t0 > curT) continue;
+    const endT = Math.min(curT, seg.t1);
+    const focus = Boolean(focusId && seg.accountId === focusId);
+    const trail: Array<{ x: number; y: number }> = [{ x: seg.x0, y: seg.y0 }];
+    if (seg.accountId) {
+      const list = byPlayer.get(seg.accountId) ?? [];
+      for (const p of list) {
+        if (p.t < seg.t0) continue;
+        if (p.t > endT) break;
+        trail.push({ x: p.x, y: p.y });
+      }
+    }
+    if (endT >= seg.t1 && Number.isFinite(seg.t1)) {
+      trail.push({ x: seg.x1, y: seg.y1 });
+    }
+
+    ctx.beginPath();
+    let started = false;
+    for (const p of trail) {
+      const { cx, cy } = toCanvas(p.x, p.y);
+      if (!started) {
+        ctx.moveTo(cx, cy);
+        started = true;
+      } else {
+        ctx.lineTo(cx, cy);
+      }
+    }
+    if (started) {
+      ctx.strokeStyle = vehicleStroke(seg.kind, focus);
+      ctx.lineWidth = focus ? 1.8 : 1.2;
+      ctx.setLineDash(seg.kind === "water" ? [4, 3] : []);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const last = trail[trail.length - 1];
+    if (last) {
+      const { cx, cy } = toCanvas(last.x, last.y);
+      const active =
+        endT < seg.t1 && (seg.destroyedAt == null || seg.destroyedAt > curT);
+      if (seg.kind === "water") {
+        const s = focus ? 5 : 4;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - s);
+        ctx.lineTo(cx + s * 0.7, cy + s * 0.5);
+        ctx.lineTo(cx - s * 0.7, cy + s * 0.5);
+        ctx.closePath();
+        ctx.fillStyle = active
+          ? "rgba(34,211,238,0.45)"
+          : "rgba(34,211,238,0.15)";
+        ctx.strokeStyle = "rgba(34,211,238,0.85)";
+        ctx.lineWidth = 1;
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        const s = focus ? 4 : 3;
+        ctx.fillStyle = active
+          ? vehicleStroke(seg.kind, true)
+          : "rgba(113,113,122,0.35)";
+        ctx.fillRect(cx - s, cy - s, s * 2, s * 2);
+      }
+    }
+  }
+
+  for (const e of events) {
+    if (e.type !== "destroy" || e.t > curT) continue;
+    const { cx, cy } = toCanvas(e.x, e.y);
+    const arm = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - arm, cy - arm);
+    ctx.lineTo(cx + arm, cy + arm);
+    ctx.moveTo(cx + arm, cy - arm);
+    ctx.lineTo(cx - arm, cy + arm);
+    ctx.strokeStyle = "rgba(248,113,113,0.55)";
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+  }
+}
+
 export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   const [data, setData] = useState<TelemetryEventsPayload | null>(null);
   const [error, setError] = useState("");
@@ -248,6 +441,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     gunlines: true,
     carePackages: true,
     deaths: true,
+    vehicles: true,
   });
   const [follow, setFollow] = useState(() => Boolean(accountId));
   const [camZoom, setCamZoom] = useState(1);
@@ -410,6 +604,11 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     return map;
   }, [data]);
 
+  const vehicleSegs = useMemo(() => {
+    if (!data?.vehicles?.length) return [];
+    return buildVehicleSegs(data.vehicles);
+  }, [data]);
+
   const duration = data?.durationSec ?? 0;
   const mapSize = mapSizeCm(data?.mapName ?? "");
 
@@ -456,10 +655,8 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
       }
     }
 
-    const toCanvas = (x: number, y: number) => ({
-      cx: ox + size / 2 + ((x - centerX) / mapSize) * size * zoom,
-      cy: oy + size / 2 + ((y - centerY) / mapSize) * size * zoom,
-    });
+    const toCanvas = (x: number, y: number) =>
+      telemetryToCanvas(x, y, mapSize, {ox, oy, size, centerX, centerY, zoom});
     const toRadius = (r: number) => (r / mapSize) * size * zoom;
 
     ctx.fillStyle = "#0c0c0e";
@@ -529,6 +726,18 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
       }
     }
 
+    if (layers.vehicles && vehicleSegs.length) {
+      drawVehicles(
+        ctx,
+        vehicleSegs,
+        payload.vehicles ?? [],
+        byPlayer,
+        curT,
+        toCanvas,
+        accountId,
+      );
+    }
+
     if (layers.gunlines && payload.gunlines?.length) {
       drawGunlines(ctx, payload.gunlines, curT, toCanvas, accountId);
     }
@@ -571,7 +780,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         }
       }
     }
-  }, [data, mapSize, layers, accountId, byPlayer, follow, camZoom, camCX, camCY, mapImage]);
+  }, [data, mapSize, layers, accountId, byPlayer, vehicleSegs, follow, camZoom, camCX, camCY, mapImage]);
 
   useEffect(() => {
     draw();
@@ -906,6 +1115,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
               ["gunlines", "枪线"],
               ["carePackages", "空投"],
               ["deaths", "死亡点"],
+              ["vehicles", "载具"],
             ] as const
           ).map(([key, label]) => {
             const noGun =
@@ -918,14 +1128,19 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
               !data.events?.some(
                 (e) => e.type === "kill" || e.type === "knock",
               );
-            const empty = noGun || noCare || noDeath;
+            const noVeh =
+              key === "vehicles" &&
+              !(data.vehicles && data.vehicles.length > 0);
+            const empty = noGun || noCare || noDeath || noVeh;
             const emptyHint = noGun
               ? "无枪线数据（可触发重新解析）"
               : noCare
                 ? "无空投事件"
                 : noDeath
                   ? "无击杀/倒地事件"
-                  : undefined;
+                  : noVeh
+                    ? "无载具数据（旧对局需重 parse）"
+                    : undefined;
             return (
               <label
                 key={key}

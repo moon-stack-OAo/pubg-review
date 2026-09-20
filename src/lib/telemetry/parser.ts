@@ -1,3 +1,4 @@
+import {resolveVehicle, shouldSkipVehicleId} from "@/lib/pubg/vehicles";
 import {
     DEFAULT_SAMPLE_HZ,
     GUNLINE_DAMAGE_PER_SEC,
@@ -7,6 +8,7 @@ import {
     type TelemetryGunline,
     type TelemetryPlayer,
     type TelemetryPosition,
+    type TelemetryVehicleEvent,
     type TelemetryZone,
 } from "@/lib/telemetry/types";
 
@@ -15,6 +17,12 @@ type Char = {
   accountId?: unknown;
   name?: unknown;
   teamId?: unknown;
+  location?: Loc;
+};
+type Veh = {
+  vehicleId?: unknown;
+  vehicleUniqueId?: unknown;
+  vehicleType?: unknown;
   location?: Loc;
 };
 
@@ -43,6 +51,16 @@ function locOf(c: Char | null): { x: number; y: number; z: number } | null {
     y: num(c.location.y),
     z: num(c.location.z),
   };
+}
+
+function asVeh(v: unknown): Veh | null {
+  if (!v || typeof v !== "object") return null;
+  return v as Veh;
+}
+
+function locFrom(loc: Loc | undefined | null): { x: number; y: number; z: number } | null {
+  if (!loc || typeof loc !== "object") return null;
+  return { x: num(loc.x), y: num(loc.y), z: num(loc.z) };
 }
 
 /**
@@ -135,9 +153,56 @@ export function parseTelemetryJson(
   const gameEvents: TelemetryEvent[] = [];
   const zones: TelemetryZone[] = [];
   const rawGunlines: TelemetryGunline[] = [];
+  const vehicles: TelemetryVehicleEvent[] = [];
   let mapName = options.mapName ?? "";
   /** 仅由事件推算，勿用官方 duration 初始化（偶发异常偏大） */
   let maxT = 0;
+
+  const pushVehicle = (
+    t: number,
+    action: TelemetryVehicleEvent["type"],
+    character: Char | null,
+    vehicle: Veh | null,
+    seatIndex?: number | null,
+  ) => {
+    const vehicleId = str(vehicle?.vehicleId);
+    if (!vehicleId || shouldSkipVehicleId(vehicleId)) return;
+    const loc = locOf(character) ?? locFrom(vehicle?.location);
+    if (!loc) return;
+    const info = resolveVehicle(vehicleId);
+    const accountId = str(character?.accountId) || null;
+    if (accountId?.startsWith("ai.")) return;
+    const uniqueId = num(vehicle?.vehicleUniqueId, -1);
+    vehicles.push({
+      t,
+      type: action,
+      vehicleId,
+      vehicleUniqueId: uniqueId >= 0 ? uniqueId : 0,
+      kind: info.kind,
+      label: info.name,
+      accountId,
+      x: loc.x,
+      y: loc.y,
+      z: loc.z,
+      seatIndex: seatIndex ?? null,
+    });
+    const eventType =
+      action === "ride"
+        ? "vehicleRide"
+        : action === "leave"
+          ? "vehicleLeave"
+          : "vehicleDestroy";
+    gameEvents.push({
+      t,
+      type: eventType,
+      attackerId: accountId,
+      victimId: null,
+      weaponId: vehicleId,
+      x: loc.x,
+      y: loc.y,
+      label: info.name,
+    });
+  };
 
   const pushGunline = (
     t: number,
@@ -332,6 +397,37 @@ export function parseTelemetryJson(
       continue;
     }
 
+    if (type === "LogVehicleRide") {
+      const character = asChar(ev.character);
+      upsertPlayer(character);
+      const t = resolveT(ev, matchStartMs);
+      maxT = Math.max(maxT, t);
+      const seat =
+        typeof ev.seatIndex === "number" ? ev.seatIndex : null;
+      pushVehicle(t, "ride", character, asVeh(ev.vehicle), seat);
+      continue;
+    }
+
+    if (type === "LogVehicleLeave") {
+      const character = asChar(ev.character);
+      upsertPlayer(character);
+      const t = resolveT(ev, matchStartMs);
+      maxT = Math.max(maxT, t);
+      const seat =
+        typeof ev.seatIndex === "number" ? ev.seatIndex : null;
+      pushVehicle(t, "leave", character, asVeh(ev.vehicle), seat);
+      continue;
+    }
+
+    if (type === "LogVehicleDestroy") {
+      const attacker = asChar(ev.attacker);
+      upsertPlayer(attacker);
+      const t = resolveT(ev, matchStartMs);
+      maxT = Math.max(maxT, t);
+      pushVehicle(t, "destroy", attacker, asVeh(ev.vehicle), null);
+      continue;
+    }
+
     if (type === "LogGameStatePeriodic") {
       const gs = ev.gameState as Record<string, unknown> | undefined;
       if (!gs) continue;
@@ -378,6 +474,7 @@ export function parseTelemetryJson(
   gameEvents.sort((a, b) => a.t - b.t);
   sampledZones.sort((a, b) => a.t - b.t);
   const gunlines = sampleGunlines(rawGunlines);
+  vehicles.sort((a, b) => a.t - b.t);
 
   // 官方 match.duration 偶发异常偏大；优先用事件推算的 maxT
   const fromEvents = Math.ceil(maxT);
@@ -407,6 +504,7 @@ export function parseTelemetryJson(
     events: gameEvents,
     zones: sampledZones,
     gunlines,
+    vehicles,
   };
 }
 

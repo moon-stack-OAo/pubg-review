@@ -88,11 +88,12 @@ export async function parseMatchTelemetry(
   const existing = await readMeta(matchId);
   if (!options?.force && existing?.status === "ready") {
     const parsed = await readParsedEvents(matchId);
-    // parser 升级（如新增 gunlines）时自动用已有 raw 重解析
+    // parser 升级（如新增 gunlines / vehicles）时自动用已有 raw 重解析
     const stale =
       !parsed ||
       parsed.parserVersion !== PARSER_VERSION ||
-      !Array.isArray(parsed.gunlines);
+      !Array.isArray(parsed.gunlines) ||
+      !Array.isArray(parsed.vehicles);
     if (parsed && !stale) {
       return { meta: existing, cached: true };
     }
@@ -255,6 +256,7 @@ export async function getTelemetryEvents(
       positions: [],
       events: [],
       gunlines: [],
+      vehicles: [],
     };
   }
 
@@ -271,6 +273,7 @@ export async function getTelemetryEvents(
       positions: [],
       events: [],
       gunlines: [],
+      vehicles: [],
     };
   }
 
@@ -288,6 +291,7 @@ export async function getTelemetryEvents(
       positions: [],
       events: [],
       gunlines: [],
+      vehicles: [],
     };
   }
 
@@ -349,9 +353,13 @@ function filterParsed(
         e.type === "carePackage" ||
         e.type === "zone" ||
         e.type === "kill" ||
-        e.type === "knock"
+        e.type === "knock" ||
+        e.type === "vehicleDestroy"
       ) {
         return true;
+      }
+      if (e.type === "vehicleRide" || e.type === "vehicleLeave") {
+        return e.attackerId === accountId;
       }
       return (
         e.attackerId === accountId ||
@@ -367,6 +375,9 @@ function filterParsed(
       (g) => g.attackerId === accountId || g.victimId === accountId,
     );
   }
+
+  // 载具事件全场返回（回放图层）；量级远小于 positions
+  const vehicles = Array.isArray(parsed.vehicles) ? parsed.vehicles : [];
 
   // zone 事件来自 zones 数组，types 含 zone 时附带为 events 可选；此处 zones 始终返回
   let zones = parsed.zones;
@@ -386,6 +397,7 @@ function filterParsed(
     positions,
     events,
     gunlines,
+    vehicles,
   };
 }
 
@@ -397,6 +409,9 @@ function parseTypes(types?: string): Set<TelemetryEventType> | null {
     "revive",
     "carePackage",
     "zone",
+    "vehicleRide",
+    "vehicleLeave",
+    "vehicleDestroy",
   ];
   const set = new Set<TelemetryEventType>();
   for (const part of types.split(",")) {

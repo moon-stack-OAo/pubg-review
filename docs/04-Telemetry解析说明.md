@@ -1,7 +1,7 @@
 # PUBG 复盘分析台 — Telemetry 解析说明
 
-> 版本：对应 `parserVersion = 1.1.0`（含枪线）  
-> 更新日期：2026-08-28  
+> 版本：对应 `parserVersion = 1.2.0`（含枪线 + 载具）  
+> 更新日期：2026-09-20  
 > 代码：`pubg-review/src/lib/telemetry/`
 
 ---
@@ -55,11 +55,21 @@
 | `LogPlayerTakeDamage` | → `gunlines[]` | 仅 `Damage_Gun` / 近战 / 爆炸 / 燃烧瓶；攻击者→受害者位置 |
 | `LogPlayerRevive` | `revive` | reviver / victim |
 | `LogCarePackageLand` / `Spawn` | `carePackage` | 空投坐标 |
+| `LogVehicleRide` | → `vehicles[]` + `vehicleRide` | 上车；跳过降落伞等噪音 id |
+| `LogVehicleLeave` | → `vehicles[]` + `vehicleLeave` | 下车 |
+| `LogVehicleDestroy` | → `vehicles[]` + `vehicleDestroy` | 摧毁 |
 | `LogGameStatePeriodic` | → `zones[]` | safetyZone / poisonGasWarning |
 | `LogPlayerPosition` | → `positions[]` | 按玩家采样 |
 | `LogMatchStart` / `LogPlayerCreate` | → `players[]` | 名单与 teamId |
 
 未映射的大量拾取/`LogPlayerAttack`（仅开火无落点）等事件在 MVP 中丢弃，以控制体积。
+
+### 载具 `vehicles[]`（parser ≥ 1.2.0）
+
+- 字段：`t` / `type`(ride|leave|destroy) / `vehicleId` / `vehicleUniqueId` / `kind`(land|water|air|other) / `label` / `accountId` / `x,y` / `seatIndex`
+- 展示名与船/车分类：`src/lib/pubg/vehicles.ts`（对齐 api-assets vehicleId 字典 + 启发式）
+- 回放：图层「载具」；轨迹用乘员 positions 在 [ride, leave] 补全；船三角 / 车方块 / 摧毁叉；无数据时开关灰显
+- **旧版 `events.json`（无 `vehicles` 或 `parserVersion` < 1.2.0）再次打开回放 / parse 时会用本地 `raw.json` 自动重解析**
 
 ### 枪线 `gunlines[]`
 
@@ -97,16 +107,18 @@
   "matchId": "...",
   "mapName": "Baltic_Main",
   "durationSec": 1800,
-  "parserVersion": "1.1.0",
+  "parserVersion": "1.2.0",
   "players": [{ "accountId": "...", "name": "...", "teamId": 4 }],
   "positions": [{ "t": 120, "accountId": "...", "x": 0, "y": 0, "z": 0 }],
   "events": [{ "t": 273, "type": "kill", "attackerId": "...", "victimId": "..." }],
   "zones": [{ "t": 0, "type": "safe", "x": 0, "y": 0, "radius": 600000 }],
-  "gunlines": [{ "t": 273, "x1": 0, "y1": 0, "x2": 1, "y2": 1, "attackerId": "...", "victimId": "...", "kind": "kill" }]
+  "gunlines": [{ "t": 273, "x1": 0, "y1": 0, "x2": 1, "y2": 1, "attackerId": "...", "victimId": "...", "kind": "kill" }],
+  "vehicles": [{ "t": 90, "type": "ride", "vehicleId": "UAZ_A_01_C", "vehicleUniqueId": 12, "kind": "land", "label": "UAZ（敞篷）", "accountId": "...", "x": 0, "y": 0 }]
 }
 ```
 
-坐标单位：**厘米**；地图边长见 `maps.ts` 的 `mapSizeCm`（Erangel 等 816000）。
+坐标单位：**厘米**；地图边长见 `maps.ts` 的 `mapSizeCm`（Erangel 等 816000）。  
+画布归一见 `map-coords.ts`（x→右、y→下、无翻转）；抽检：`docs/08-地图坐标抽检.md`、`node scripts/check-map-coords.mjs`。
 
 ---
 
@@ -117,7 +129,7 @@
 | `POST` | `/api/v1/matches/{matchId}/telemetry/parse?platform=` | 幂等触发；已 ready 直接返回 |
 | `GET` | `/api/v1/matches/{matchId}/telemetry/events?platform=&accountId=&types=&sampleHz=` | 精简流；默认未 ready 时自动 parse |
 
-`types`：`kill,knock,revive,carePackage,zone`（逗号分隔）。
+`types`：`kill,knock,revive,carePackage,zone,vehicleRide,vehicleLeave,vehicleDestroy`（逗号分隔）。
 
 对局详情 `GET /matches/{matchId}` 增加 `telemetryStatus` / `hasTelemetryAsset`，**不返回**官方 CDN URL。
 

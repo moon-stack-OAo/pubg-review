@@ -16,6 +16,10 @@ function isMutationRequest(request: NextRequest): boolean {
   ) {
     return true;
   }
+  // AI 生成仅 POST 算写；GET 只读缓存
+  if (pathname.includes("/report/ai") && request.method !== "GET") {
+    return true;
+  }
   const force = searchParams.get("force");
   const refresh = searchParams.get("refresh");
   if (force === "1" || force === "true") return true;

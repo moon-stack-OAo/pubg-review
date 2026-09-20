@@ -45,6 +45,12 @@ function describe(
       return e.label ?? "空投";
     case "zone":
       return e.label ?? "安全区变化";
+    case "vehicleRide":
+      return `${nameOf(players, e.attackerId)} 上车${e.label ? `（${e.label}）` : ""}`;
+    case "vehicleLeave":
+      return `${nameOf(players, e.attackerId)} 下车${e.label ? `（${e.label}）` : ""}`;
+    case "vehicleDestroy":
+      return `载具摧毁${e.label ? `（${e.label}）` : ""}`;
     default:
       return e.type;
   }

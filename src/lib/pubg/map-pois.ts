@@ -1,3 +1,5 @@
+import {communityPxToCm} from "./map-coords";
+
 export type MapPoiKind =
   | "hotspot"
   | "building"
@@ -31,9 +33,8 @@ const SECRET_ROOM_NOTE =
 
 const COMMUNITY_MAP_PX = 8192;
 
-/** 社区图鉴常用 8192 像素全图 → 遥测厘米 */
 function mapPxToCm(px: number, sizeCm: number): number {
-  return Math.round((px / COMMUNITY_MAP_PX) * sizeCm);
+  return communityPxToCm(px, sizeCm, COMMUNITY_MAP_PX);
 }
 
 type SecretRoomPx = readonly [communityId: string, name: string, px: number, py: number];
