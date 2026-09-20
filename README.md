@@ -112,15 +112,18 @@ MCP_TOKEN=换成足够长的随机串
 | `get_player_dashboard` | 战绩概览                      |
 | `get_player_form`      | 近况 formStatus + anomalies |
 | `get_player_analysis`  | 近 N 场报告聚合                 |
-| `get_match`            | 对局详情                      |
-| `get_match_report`     | 复盘报告                      |
+| `get_match`            | 对局详情（含 mapLabel 中文）       |
+| `get_match_report`     | 复盘报告（附 mapName / mapLabel） |
 | `compare_players`      | 两人赛季 KPI 对比               |
 | `get_squad_stats`      | 车队同场统计                    |
 | `suggest_squad_mates`  | 常一起 Top3 队友               |
 | `get_player_weapons`   | 武器 / 战斗聚合                 |
-| `get_player_maps`      | 地图聚合                      |
+| `get_player_maps`      | 地图聚合（含 mapLabel）          |
 | `list_seasons`         | 赛季列表                      |
 | `list_player_history`  | 本地历史库列表                   |
+| `parse_telemetry`      | 幂等解析对局遥测                  |
+| `get_telemetry_events` | 精简事件流（可 autoParse）         |
+| `sync_player_history`  | 同步近况到本地历史库（有冷却）           |
 
 Tools 直接调用服务层，不经 `/api/v1` HTTP 自调用。局域网可直连；公网需隧道或正式部署，并建议防火墙限 IP。
 

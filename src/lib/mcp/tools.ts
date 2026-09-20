@@ -2,12 +2,13 @@ import {getPlayerAnalysisByName} from "@/lib/analysis/player-analysis";
 import {getPlayerFormAnalysis} from "@/lib/analysis/player-form";
 import {buildMatchReport} from "@/lib/analysis/report-service";
 import {friendlyErrorMessage} from "@/lib/errors";
-import {buildCompareSide, getWeaponsTabData, getMapsTabData, listLocalHistory} from "@/lib/history/service";
+import {buildCompareSide, getWeaponsTabData, getMapsTabData, listLocalHistory, syncPlayerHistory,} from "@/lib/history/service";
+import {mapLabel} from "@/lib/pubg/maps";
 import {getCachedMatch, getCachedPlayer, getCachedSeasons, getPlayerDashboard,} from "@/lib/pubg/service";
 import {PUBG_PLATFORMS, type PubgPlatform} from "@/lib/pubg/types";
 import {detectFrequentMates} from "@/lib/squad/detect-mates";
 import {getSquadStats} from "@/lib/squad/stats";
-import {getTelemetryStatus} from "@/lib/telemetry/service";
+import {getTelemetryEvents, getTelemetryStatus, parseMatchTelemetry,} from "@/lib/telemetry/service";
 import type {McpServer} from "@modelcontextprotocol/server";
 import {z} from "zod";
 
@@ -105,7 +106,7 @@ export function registerPubgMcpTools(server: McpServer) {
     {
       title: "对局详情",
       description:
-        "按 matchId 获取对局详情（积分板/队伍），可指定 accountId 聚焦某位玩家。不返回 telemetry CDN URL。",
+        "按 matchId 获取对局详情（积分板/队伍），含 mapName（官方内部名）与 mapLabel（中文）。可指定 accountId 聚焦某位玩家。不返回 telemetry CDN URL。",
       inputSchema: z.object({
         platform: platformSchema.describe("平台：steam / kakao / xbox / psn"),
         matchId: z.string().min(1).describe("对局 ID"),
@@ -128,6 +129,7 @@ export function registerPubgMcpTools(server: McpServer) {
 
         return textResult({
           ...match,
+          mapLabel: mapLabel(match.mapName),
           telemetryUrl: undefined,
           hasTelemetryAsset: Boolean(match.telemetryUrl),
           telemetryStatus,
@@ -146,7 +148,7 @@ export function registerPubgMcpTools(server: McpServer) {
     {
       title: "对局复盘报告",
       description:
-        "生成指定玩家在某场对局的复盘报告（含主因标签与摘要）。telemetry ready 时使用增强规则。",
+        "生成指定玩家在某场对局的复盘报告（含主因标签与摘要），并附带 mapName / mapLabel（中文）。telemetry ready 时使用增强规则。",
       inputSchema: z.object({
         platform: platformSchema.describe("平台：steam / kakao / xbox / psn"),
         matchId: z.string().min(1).describe("对局 ID"),
@@ -160,10 +162,13 @@ export function registerPubgMcpTools(server: McpServer) {
           matchId,
           accountId,
         );
+        const { value: match } = await getCachedMatch(platform, matchId);
         return textResult({
           report,
           cached,
           ruleVersion: report.ruleVersion,
+          mapName: match.mapName,
+          mapLabel: mapLabel(match.mapName),
         });
       } catch (error) {
         return errorResult(error);
@@ -366,7 +371,8 @@ export function registerPubgMcpTools(server: McpServer) {
     "get_player_maps",
     {
       title: "地图聚合",
-      description: "基于本地历史库按地图聚合场次、排名、KD、伤害与胜率。",
+      description:
+        "基于本地历史库按地图聚合场次、排名、KD、伤害与胜率；每行含 mapName（官方内部名）与 mapLabel（中文）。",
       inputSchema: z.object({
         accountId: z.string().min(1).describe("玩家 accountId"),
         gameMode: z.string().optional().describe("可选游戏模式过滤"),
@@ -421,6 +427,128 @@ export function registerPubgMcpTools(server: McpServer) {
         const data = await listLocalHistory(accountId, {
           gameMode,
           limit: limit ?? 50,
+        });
+        return textResult(data);
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "parse_telemetry",
+    {
+      title: "解析对局遥测",
+      description:
+        "幂等下载并解析指定对局的遥测（落盘到 .data/telemetry）。已 ready 则直接返回；force=true 强制重解析。会占用官方/CDN 额度，请串行、勿批量扫库。",
+      inputSchema: z.object({
+        platform: platformSchema.describe("平台：steam / kakao / xbox / psn"),
+        matchId: z.string().min(1).describe("对局 ID"),
+        force: z
+          .boolean()
+          .optional()
+          .describe("true 时强制重解析（可用已有 raw）；默认 false"),
+      }),
+    },
+    async ({ platform, matchId, force }) => {
+      try {
+        const { meta, cached } = await parseMatchTelemetry(platform, matchId, {
+          force,
+        });
+        return textResult({
+          matchId: meta.matchId,
+          status: meta.status,
+          errorMessage: meta.errorMessage,
+          parserVersion: meta.parserVersion,
+          parsedAt: meta.parsedAt,
+          mapName: meta.mapName ?? null,
+          mapLabel: meta.mapName ? mapLabel(meta.mapName) : null,
+          durationSec: meta.durationSec ?? null,
+          cached,
+        });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_telemetry_events",
+    {
+      title: "遥测精简事件流",
+      description:
+        "读取已解析的精简遥测（击杀/倒地/救援/空投/圈、轨迹、枪线）。默认未解析时会 autoParse；types 为逗号分隔，如 kill,knock。不返回官方 CDN URL。",
+      inputSchema: z.object({
+        platform: platformSchema.describe("平台：steam / kakao / xbox / psn"),
+        matchId: z.string().min(1).describe("对局 ID"),
+        accountId: z
+          .string()
+          .optional()
+          .describe("可选，聚焦玩家：过滤事件/枪线并降采样他人轨迹"),
+        types: z
+          .string()
+          .optional()
+          .describe("可选事件类型过滤，逗号分隔：kill,knock,revive,carePackage,zone"),
+        sampleHz: z
+          .number()
+          .positive()
+          .optional()
+          .describe("轨迹采样 Hz，越小越稀疏；默认与落盘一致"),
+        autoParse: z
+          .boolean()
+          .optional()
+          .describe("未解析时是否自动 parse，默认 true；false 则仅读盘"),
+      }),
+    },
+    async ({ platform, matchId, accountId, types, sampleHz, autoParse }) => {
+      try {
+        const data = await getTelemetryEvents(platform, matchId, {
+          accountId,
+          types,
+          sampleHz,
+          autoParse,
+        });
+        return textResult({
+          ...data,
+          mapLabel: data.mapName ? mapLabel(data.mapName) : null,
+        });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "sync_player_history",
+    {
+      title: "同步玩家近况到本地历史库",
+      description:
+        "按昵称拉取近期对局并 upsert 到本地历史库（约 90s 冷却）。可选 parseRecent 串行解析最近 N 场遥测（0-3）。accountId 须与昵称匹配。",
+      inputSchema: z.object({
+        platform: platformSchema.describe("平台：steam / kakao / xbox / psn"),
+        accountId: z.string().min(1).describe("玩家 accountId"),
+        name: z.string().min(1).describe("游戏内昵称（须与 accountId 匹配）"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(15)
+          .optional()
+          .describe("同步近场数，1-15，默认 10"),
+        parseRecent: z
+          .number()
+          .int()
+          .min(0)
+          .max(3)
+          .optional()
+          .describe("同步后串行 parse 最近 N 场遥测，0-3，默认 0"),
+      }),
+    },
+    async ({ platform, accountId, name, limit, parseRecent }) => {
+      try {
+        const data = await syncPlayerHistory(platform, accountId, name, {
+          limit,
+          parseRecent,
         });
         return textResult(data);
       } catch (error) {
