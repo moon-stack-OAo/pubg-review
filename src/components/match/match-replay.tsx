@@ -10,8 +10,9 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import {formatDuration} from "@/lib/format";
-import {mapLabel, mapSizeCm} from "@/lib/pubg/maps";
+import {getMapByApiName, mapLabel, mapSizeCm} from "@/lib/pubg/maps";
 import type {
+    TelemetryEvent,
     TelemetryEventsPayload,
     TelemetryGunline,
     TelemetryPosition,
@@ -31,6 +32,8 @@ type Layers = {
   names: boolean;
   zones: boolean;
   gunlines: boolean;
+  carePackages: boolean;
+  deaths: boolean;
 };
 
 /** 枪线淡出窗口（秒）：仅绘制 [t-FADE, t] 内线段 */
@@ -136,6 +139,100 @@ function drawGunlines(
   }
 }
 
+function isFocusEvent(e: TelemetryEvent, focusId?: string): boolean {
+  if (!focusId) return false;
+  return (
+    e.attackerId === focusId ||
+    e.victimId === focusId ||
+    e.reviverId === focusId
+  );
+}
+
+/** 空投落点：菱形标记，落地后持续可见 */
+function drawCarePackages(
+  ctx: CanvasRenderingContext2D,
+  events: TelemetryEvent[],
+  curT: number,
+  toCanvas: (x: number, y: number) => { cx: number; cy: number },
+) {
+  for (const e of events) {
+    if (e.type !== "carePackage") continue;
+    if (e.t > curT) continue;
+    if (e.x == null || e.y == null) continue;
+    const { cx, cy } = toCanvas(e.x, e.y);
+    const s = 5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s);
+    ctx.lineTo(cx + s, cy);
+    ctx.lineTo(cx, cy + s);
+    ctx.lineTo(cx - s, cy);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(56,189,248,0.35)";
+    ctx.strokeStyle = "rgba(56,189,248,0.85)";
+    ctx.lineWidth = 1.2;
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+/** 死亡 / 倒地固定标记：按时间累积可见；焦点玩家略强调 */
+function drawDeathMarks(
+  ctx: CanvasRenderingContext2D,
+  events: TelemetryEvent[],
+  curT: number,
+  toCanvas: (x: number, y: number) => { cx: number; cy: number },
+  focusId?: string,
+) {
+  for (const e of events) {
+    if (e.type !== "kill" && e.type !== "knock") continue;
+    if (e.t > curT) continue;
+    if (e.x == null || e.y == null) continue;
+    const focus = isFocusEvent(e, focusId);
+    const { cx, cy } = toCanvas(e.x, e.y);
+    const near = Math.abs(e.t - curT) <= EVENT_HL_SEC;
+    if (e.type === "kill") {
+      const arm = focus ? 4.5 : 3.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - arm, cy - arm);
+      ctx.lineTo(cx + arm, cy + arm);
+      ctx.moveTo(cx + arm, cy - arm);
+      ctx.lineTo(cx - arm, cy + arm);
+      ctx.strokeStyle = focus
+        ? "rgba(251,113,133,0.95)"
+        : "rgba(251,113,133,0.55)";
+      ctx.lineWidth = focus ? 1.6 : 1.1;
+      ctx.stroke();
+      if (near) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, focus ? 9 : 7, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(251,113,133,${focus ? 0.55 : 0.35})`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    } else {
+      const r = focus ? 3.5 : 2.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = focus
+        ? "rgba(251,191,36,0.55)"
+        : "rgba(251,191,36,0.28)";
+      ctx.strokeStyle = focus
+        ? "rgba(251,191,36,0.9)"
+        : "rgba(251,191,36,0.5)";
+      ctx.lineWidth = 1;
+      ctx.fill();
+      ctx.stroke();
+      if (near) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, focus ? 9 : 7, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(251,191,36,${focus ? 0.5 : 0.3})`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
 export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   const [data, setData] = useState<TelemetryEventsPayload | null>(null);
   const [error, setError] = useState("");
@@ -149,6 +246,8 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     names: true,
     zones: true,
     gunlines: true,
+    carePackages: true,
+    deaths: true,
   });
   const [follow, setFollow] = useState(() => Boolean(accountId));
   const [camZoom, setCamZoom] = useState(1);
@@ -156,6 +255,10 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   const [camCY, setCamCY] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [loadedMap, setLoadedMap] = useState<{
+    src: string;
+    img: HTMLImageElement;
+  } | null>(null);
   const tRef = useRef(0);
   const playingRef = useRef(false);
   const speedRef = useRef(1);
@@ -215,6 +318,30 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
   useEffect(() => {
     mapSizeRef.current = mapSizeCm(data?.mapName ?? "");
   }, [data?.mapName]);
+
+  const mapInfo = data?.mapName ? getMapByApiName(data.mapName) : null;
+  const mapImageSrc = mapInfo?.image ?? null;
+  const mapImage =
+    loadedMap && mapImageSrc && loadedMap.src === mapImageSrc
+      ? loadedMap.img
+      : null;
+
+  useEffect(() => {
+    if (!mapImageSrc) return;
+    let cancelled = false;
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => {
+      if (!cancelled) setLoadedMap({ src: mapImageSrc, img });
+    };
+    img.onerror = () => {
+      if (!cancelled) setLoadedMap(null);
+    };
+    img.src = mapImageSrc;
+    return () => {
+      cancelled = true;
+    };
+  }, [mapImageSrc]);
 
   const load = useCallback(async (opts?: { forceParse?: boolean }) => {
     setError("");
@@ -337,6 +464,23 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
 
     ctx.fillStyle = "#0c0c0e";
     ctx.fillRect(0, 0, w, h);
+
+    if (mapImage && mapImage.complete && mapImage.naturalWidth > 0) {
+      const half = (mapSize * zoom) / 2;
+      const srcW = mapImage.naturalWidth;
+      const srcH = mapImage.naturalHeight;
+      const sx = ((centerX - half) / mapSize) * srcW;
+      const sy = ((centerY - half) / mapSize) * srcH;
+      const sw = srcW * zoom;
+      const sh = srcH * zoom;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ox, oy, size, size);
+      ctx.clip();
+      ctx.drawImage(mapImage, sx, sy, sw, sh, ox, oy, size, size);
+      ctx.restore();
+    }
+
     ctx.strokeStyle = "#27272a";
     ctx.lineWidth = 1;
     ctx.strokeRect(ox, oy, size, size);
@@ -389,25 +533,12 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
       drawGunlines(ctx, payload.gunlines, curT, toCanvas, accountId);
     }
 
-    for (const e of payload.events) {
-      if (e.type !== "kill" && e.type !== "knock") continue;
-      if (e.x == null || e.y == null) continue;
-      if (Math.abs(e.t - curT) > EVENT_HL_SEC) continue;
-      const { cx, cy } = toCanvas(e.x, e.y);
-      const age = Math.abs(e.t - curT);
-      const alpha = Math.max(0.35, 1 - age / EVENT_HL_SEC);
-      ctx.beginPath();
-      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-      if (e.type === "kill") {
-        ctx.strokeStyle = `rgba(251,113,133,${alpha})`;
-        ctx.fillStyle = `rgba(251,113,133,${alpha * 0.18})`;
-      } else {
-        ctx.strokeStyle = `rgba(251,191,36,${alpha})`;
-        ctx.fillStyle = `rgba(251,191,36,${alpha * 0.18})`;
-      }
-      ctx.lineWidth = 2;
-      ctx.fill();
-      ctx.stroke();
+    if (layers.carePackages && payload.events?.length) {
+      drawCarePackages(ctx, payload.events, curT, toCanvas);
+    }
+
+    if (layers.deaths && payload.events?.length) {
+      drawDeathMarks(ctx, payload.events, curT, toCanvas, accountId);
     }
 
     const nameById = new Map(payload.players.map((p) => [p.accountId, p]));
@@ -440,11 +571,11 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         }
       }
     }
-  }, [data, mapSize, layers, accountId, byPlayer, follow, camZoom, camCX, camCY]);
+  }, [data, mapSize, layers, accountId, byPlayer, follow, camZoom, camCX, camCY, mapImage]);
 
   useEffect(() => {
     draw();
-  }, [draw, t, layers, follow, camZoom, camCX, camCY]);
+  }, [draw, t, layers, follow, camZoom, camCX, camCY, mapImage]);
 
   const onCanvasPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -647,7 +778,10 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">2D 回放（MVP）</h2>
         <span className="text-xs text-muted">
-          {mapLabel(data.mapName)} · 坐标粗归一 · 非官方贴图
+          {mapLabel(data.mapName)}
+          {mapInfo
+            ? " · 官方 api-assets 底图"
+            : " · 暂无对应底图"}
         </span>
       </div>
 
@@ -663,6 +797,33 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         onPointerCancel={endPointer}
         onWheel={onCanvasWheel}
       />
+
+      <p className="mt-2 text-center text-[11px] text-muted">
+        {mapInfo ? (
+          <>
+            底图来自{" "}
+            <a
+              href="https://github.com/pubg/api-assets"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
+              PUBG API Assets
+            </a>
+            （Low Res）· 署名见页脚 ·{" "}
+            <a
+              href="https://developer.pubg.com/tos"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
+              Developer ToS
+            </a>
+          </>
+        ) : (
+          "未知地图，使用纯色画布降级"
+        )}
+      </p>
 
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -743,26 +904,44 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
               ["names", "名字"],
               ["zones", "安全区"],
               ["gunlines", "枪线"],
+              ["carePackages", "空投"],
+              ["deaths", "死亡点"],
             ] as const
           ).map(([key, label]) => {
             const noGun =
               key === "gunlines" && !(data.gunlines && data.gunlines.length > 0);
+            const noCare =
+              key === "carePackages" &&
+              !data.events?.some((e) => e.type === "carePackage");
+            const noDeath =
+              key === "deaths" &&
+              !data.events?.some(
+                (e) => e.type === "kill" || e.type === "knock",
+              );
+            const empty = noGun || noCare || noDeath;
+            const emptyHint = noGun
+              ? "无枪线数据（可触发重新解析）"
+              : noCare
+                ? "无空投事件"
+                : noDeath
+                  ? "无击杀/倒地事件"
+                  : undefined;
             return (
               <label
                 key={key}
-                className={`flex items-center gap-1.5 ${noGun ? "opacity-40" : ""}`}
-                title={noGun ? "无枪线数据（可触发重新解析）" : undefined}
+                className={`flex items-center gap-1.5 ${empty ? "opacity-40" : ""}`}
+                title={emptyHint}
               >
                 <input
                   type="checkbox"
                   checked={layers[key]}
-                  disabled={noGun}
+                  disabled={empty}
                   onChange={(e) =>
                     setLayers((prev) => ({ ...prev, [key]: e.target.checked }))
                   }
                 />
                 {label}
-                {noGun ? <span className="text-muted">（无数据）</span> : null}
+                {empty ? <span className="text-muted">（无数据）</span> : null}
               </label>
             );
           })}

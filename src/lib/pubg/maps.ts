@@ -144,6 +144,10 @@ export function mapIdFromApiName(mapName: string): string | null {
   return PUBG_MAPS.find((map) => map.apiNames.includes(mapName))?.id ?? null;
 }
 
+export function getMapByApiName(mapName: string): PubgMapInfo | null {
+  return PUBG_MAPS.find((map) => map.apiNames.includes(mapName)) ?? null;
+}
+
 export function mapSizeLabel(sizeCm: number): string {
   const sizeKm = sizeCm / 100_000;
   return `${sizeKm.toFixed(Number.isInteger(sizeKm) ? 0 : 1)} × ${sizeKm.toFixed(Number.isInteger(sizeKm) ? 0 : 1)} km`;

@@ -343,8 +343,16 @@ function filterParsed(
     events = events.filter((e) => typeSet.has(e.type));
   }
   if (accountId) {
+    // 空投 / 击杀 / 倒地保留全场，供回放地图标记；救援等仍按焦点过滤
     events = events.filter((e) => {
-      if (e.type === "carePackage" || e.type === "zone") return true;
+      if (
+        e.type === "carePackage" ||
+        e.type === "zone" ||
+        e.type === "kill" ||
+        e.type === "knock"
+      ) {
+        return true;
+      }
       return (
         e.attackerId === accountId ||
         e.victimId === accountId ||

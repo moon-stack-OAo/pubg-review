@@ -585,6 +585,111 @@ function DamageShareBars({ rows }: { rows: SquadMemberStats[] }) {
   );
 }
 
+function SquadEmptyGuide({
+  platform,
+  name,
+  mates,
+  limit,
+  gameMode,
+  hours,
+  date,
+  tz,
+  scanned,
+  missingByMate,
+  mateRefs,
+}: {
+  platform: string;
+  name: string;
+  mates: string[];
+  limit: number;
+  gameMode: string;
+  hours?: number | null;
+  date?: string | null;
+  tz?: string | null;
+  scanned: number;
+  missingByMate: Record<string, number>;
+  mateRefs: { accountId: string; name: string }[];
+}) {
+  const nextLimit = Math.min(32, Math.max(limit + 8, limit === 20 ? 28 : limit * 2));
+  const canBumpLimit = nextLimit > limit;
+  const topMissing = mateRefs
+    .map((m) => ({
+      name: m.name,
+      n: missingByMate[m.accountId] ?? 0,
+    }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n)[0];
+
+  const reason =
+    scanned === 0
+      ? "当前范围内无可扫描对局（历史库可能为空，或时间窗/模式过滤过严）。车队统计依赖本地近况，需先有对局样本。"
+      : `已扫描 ${scanned} 场，尚无「主玩家 + 所填队友」同队齐全场。统计只聚合齐全场，故下方对比与列表为空。`;
+
+  const overviewHref = `/player/${platform}/${encodeURIComponent(name)}?tab=overview`;
+  const bumpHref = canBumpLimit
+    ? buildSquadHref(platform, name, {
+        mates,
+        limit: nextLimit,
+        gameMode,
+        hours: date ? null : hours,
+        date,
+        tz,
+      })
+    : null;
+  const clearModeHref = gameMode
+    ? buildSquadHref(platform, name, {
+        mates,
+        limit,
+        gameMode: "",
+        hours: date ? null : hours,
+        date,
+        tz,
+      })
+    : null;
+
+  const linkClass = "text-accent hover:underline";
+  const btnClass =
+    "inline-flex items-center rounded-lg border border-border-strong px-3 py-1.5 text-sm text-fg hover:border-accent/50";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-surface-2 px-4 py-3">
+      <div>
+        <p className="text-sm font-medium text-fg">暂无齐全同场样本</p>
+        <p className="mt-1 text-sm text-fg-secondary">{reason}</p>
+        {topMissing ? (
+          <p className="mt-1 text-xs text-muted">
+            缺席较多：{topMissing.name}（{topMissing.n}/{scanned}
+            ），可核对昵称大小写是否与游戏内一致。
+          </p>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link href={overviewHref} className={btnClass}>
+          去同步近况
+        </Link>
+        {bumpHref ? (
+          <Link href={bumpHref} className={btnClass}>
+            扩大扫描至 {nextLimit} 场
+          </Link>
+        ) : null}
+        {clearModeHref ? (
+          <Link href={clearModeHref} className={btnClass}>
+            清空模式再统计
+          </Link>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted">
+        也可上方改「扫描场次 / 时间范围 / 模式」后点「统计」；队友填少 1
+        人可降低齐全门槛。右上角「同步近况」与{" "}
+        <Link href={overviewHref} className={linkClass}>
+          概览
+        </Link>{" "}
+        写入历史库效果相同。
+      </p>
+    </div>
+  );
+}
+
 function FullSquadMatches({
   matches,
   platform,
@@ -597,11 +702,7 @@ function FullSquadMatches({
   name: string;
 }) {
   if (matches.length === 0) {
-    return (
-      <p className="text-sm text-muted">
-        暂无四人齐全对局。可调大扫描场次、换模式，或先同步近况写入历史库。
-      </p>
-    );
+    return null;
   }
 
   return (
@@ -741,7 +842,7 @@ export function SquadTabPanel({
               {stats.gameMode ? ` · 模式=${gameModeLabel(stats.gameMode)}` : ""} · 齐全场{" "}
               {stats.sample.fullSquad} / 扫描 {stats.sample.scanned}
             </p>
-            {stats.insights?.length ? (
+            {stats.sample.fullSquad > 0 && stats.insights?.length ? (
               <ul className="mt-3 space-y-1.5 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg-secondary">
                 {stats.insights.map((line, i) => (
                   <li key={i} className="flex gap-2">
@@ -753,37 +854,55 @@ export function SquadTabPanel({
             ) : null}
           </div>
 
-          <div>
-            <h3 className="mb-2 text-sm font-medium text-fg-secondary">
-              四人对比（齐全场）
-            </h3>
-            <PerPlayerTable rows={stats.perPlayer} />
-          </div>
-
-          <DamageShareBars rows={stats.perPlayer} />
-
-          <div>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-fg-secondary">
-                齐全对局
-                <span className="ml-2 text-xs font-normal text-muted">
-                  {stats.matches.length} 场
-                </span>
-              </h3>
-              <ExportSquadCsv
-                platform={platform}
-                playerName={name}
-                matches={stats.matches}
-                perPlayer={stats.perPlayer}
-              />
-            </div>
-            <FullSquadMatches
-              matches={stats.matches}
+          {stats.sample.fullSquad === 0 ? (
+            <SquadEmptyGuide
               platform={platform}
-              accountId={accountId}
               name={name}
+              mates={mateNames.length ? mateNames : mates}
+              limit={stats.limit}
+              gameMode={gameMode}
+              hours={effectiveHours}
+              date={effectiveDate}
+              tz={effectiveTz}
+              scanned={stats.sample.scanned}
+              missingByMate={stats.sample.missingByMate}
+              mateRefs={stats.mates}
             />
-          </div>
+          ) : (
+            <>
+              <div>
+                <h3 className="mb-2 text-sm font-medium text-fg-secondary">
+                  四人对比（齐全场）
+                </h3>
+                <PerPlayerTable rows={stats.perPlayer} />
+              </div>
+
+              <DamageShareBars rows={stats.perPlayer} />
+
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-medium text-fg-secondary">
+                    齐全对局
+                    <span className="ml-2 text-xs font-normal text-muted">
+                      {stats.matches.length} 场
+                    </span>
+                  </h3>
+                  <ExportSquadCsv
+                    platform={platform}
+                    playerName={name}
+                    matches={stats.matches}
+                    perPlayer={stats.perPlayer}
+                  />
+                </div>
+                <FullSquadMatches
+                  matches={stats.matches}
+                  platform={platform}
+                  accountId={accountId}
+                  name={name}
+                />
+              </div>
+            </>
+          )}
         </>
       ) : null}
     </div>
