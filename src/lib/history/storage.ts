@@ -17,13 +17,14 @@ function withAccountWriteLock<T>(
 ): Promise<T> {
   const prev = chains.get(accountId) ?? Promise.resolve();
   const next = prev.then(fn, fn);
-  chains.set(
-    accountId,
-    next.then(
-      () => undefined,
-      () => undefined,
-    ),
+  const tail = next.then(
+    () => undefined,
+    () => undefined,
   );
+  chains.set(accountId, tail);
+  void tail.then(() => {
+    if (chains.get(accountId) === tail) chains.delete(accountId);
+  });
   return next;
 }
 

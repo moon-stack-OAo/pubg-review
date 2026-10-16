@@ -24,11 +24,12 @@ import type {
 import {cacheGet, cacheSet} from "@/lib/cache";
 import {BizError} from "@/lib/errors";
 import {getCachedMatch, getCachedPlayer, getCachedSeason,} from "@/lib/pubg/service";
-import type {PubgMatchDetail, PubgPlatform} from "@/lib/pubg/types";
+import type {PubgPlatform} from "@/lib/pubg/types";
 import {getTelemetryStatus, parseMatchTelemetry} from "@/lib/telemetry/service";
 import {readParsedEvents} from "@/lib/telemetry/storage";
 
 const SYNC_COOLDOWN_MS = 90_000;
+const syncingAccounts = new Set<string>();
 
 type SyncCooldown = { lastAt: number };
 
@@ -106,6 +107,25 @@ export async function syncPlayerHistory(
   playerName: string,
   options?: { limit?: number; parseRecent?: number },
 ): Promise<SyncHistoryResult> {
+  if (syncingAccounts.has(accountId)) {
+    throw new BizError("同步正在进行中，请稍后再试", 409, 40901, {
+      retryAfterSec: 1,
+    });
+  }
+  syncingAccounts.add(accountId);
+  try {
+    return await runHistorySync(platform, accountId, playerName, options);
+  } finally {
+    syncingAccounts.delete(accountId);
+  }
+}
+
+async function runHistorySync(
+  platform: PubgPlatform,
+  accountId: string,
+  playerName: string,
+  options?: { limit?: number; parseRecent?: number },
+): Promise<SyncHistoryResult> {
   const name = playerName.trim();
   if (!name) throw new BizError("name 不能为空");
 
@@ -128,18 +148,17 @@ export async function syncPlayerHistory(
 
   const matchIds = player.matchIds.slice(0, limit);
 
-  const details: PubgMatchDetail[] = [];
+  const records: HistoryMatchRecord[] = [];
   for (const matchId of matchIds) {
     try {
       // 已缓存则不重复打官方；串行避免瞬时打满
       const { value } = await getCachedMatch(platform, matchId);
-      details.push(value);
+      records.push(toHistoryRecord(value, accountId));
     } catch {
       // 单场跳过
     }
   }
 
-  const records = details.map((m) => toHistoryRecord(m, accountId));
   const file = await upsertHistoryMatches(accountId, platform, records);
   const nameResult = await recordPlayerName(accountId, platform, player.name);
 

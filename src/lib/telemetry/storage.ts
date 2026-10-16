@@ -1,7 +1,9 @@
 import {promises as fs} from "fs";
 import path from "path";
+import {randomUUID} from "node:crypto";
 import {safeSegment} from "@/lib/persist/fs-json";
 import type {ParsedTelemetry, TelemetryAssetMeta} from "@/lib/telemetry/types";
+import {runTelemetryTask} from "@/lib/telemetry/task-queue";
 
 const ROOT = path.resolve(path.join(process.cwd(), ".data", "telemetry"));
 
@@ -54,11 +56,27 @@ export async function writeRawJson(
   matchId: string,
   data: unknown,
 ): Promise<string> {
-  await ensureDir(matchId);
   const file = rawPath(matchId);
   const text = typeof data === "string" ? data : JSON.stringify(data);
-  await fs.writeFile(file, text, "utf8");
+  await writeRawFile(matchId, (temporary) => fs.writeFile(temporary, text, "utf8"));
   return file;
+}
+
+/** 下载与校验均完成后才替换 raw，异常时保留原文件并移除临时文件。 */
+export async function writeRawFile<T>(
+  matchId: string,
+  write: (temporary: string) => Promise<T>,
+): Promise<T> {
+  await ensureDir(matchId);
+  const file = rawPath(matchId);
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    const result = await write(temporary);
+    await fs.rename(temporary, file);
+    return result;
+  } finally {
+    await fs.rm(temporary, {force: true});
+  }
 }
 
 export async function writeParsedEvents(
@@ -72,6 +90,13 @@ export async function writeParsedEvents(
 }
 
 export async function readParsedEvents(
+  matchId: string,
+): Promise<ParsedTelemetry | null> {
+  return runTelemetryTask(`events:${matchId}`, () => readParsedEventsInTask(matchId));
+}
+
+/** 仅供已取得遥测队列执行权的服务内部使用，避免嵌套排队。 */
+export async function readParsedEventsInTask(
   matchId: string,
 ): Promise<ParsedTelemetry | null> {
   try {
@@ -92,10 +117,12 @@ export async function rawExists(matchId: string): Promise<boolean> {
 }
 
 export async function readRawJson(matchId: string): Promise<unknown | null> {
-  try {
-    const text = await fs.readFile(rawPath(matchId), "utf8");
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
+  return runTelemetryTask(`raw:${matchId}`, async () => {
+    try {
+      const text = await fs.readFile(rawPath(matchId), "utf8");
+      return JSON.parse(text) as unknown;
+    } catch {
+      return null;
+    }
+  });
 }

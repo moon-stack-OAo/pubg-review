@@ -1,4 +1,7 @@
 import {appendApiSyncLog} from "@/lib/sync-log";
+import {createWriteStream} from "node:fs";
+import {pipeline} from "node:stream/promises";
+import {TELEMETRY_MAX_BYTES} from "@/lib/telemetry/json-stream";
 import {getSeasonLabel, normalizeSeasons} from "./seasons";
 import type {
     PubgBanType,
@@ -538,8 +541,6 @@ export async function getMatchTelemetryUrl(
   return detail.telemetryUrl;
 }
 
-const TELEMETRY_MAX_BYTES = 80 * 1024 * 1024;
-
 function isPrivateOrLocalHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
@@ -595,76 +596,71 @@ export function assertSafeTelemetryUrl(url: string): URL {
   return parsed;
 }
 
-async function readResponseTextLimited(
-  response: Response,
-  maxBytes: number,
-): Promise<string> {
-  const contentLength = Number(response.headers.get("content-length") ?? "");
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new PubgApiError("遥测文件过大", 413);
-  }
-
-  if (!response.body) {
-    const text = await response.text();
-    if (text.length > maxBytes) {
+async function* downloadTelemetryChunks(url: string): AsyncGenerator<Uint8Array> {
+  const safeUrl = assertSafeTelemetryUrl(url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+  timeout.unref();
+  let response: Response | undefined;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    response = await fetch(safeUrl.toString(), {
+      headers: {Accept: "application/json", "Accept-Encoding": "gzip"},
+      cache: "no-store",
+      redirect: "manual",
+      // 显式 signal 禁用 Next/React fetch 去重，避免 tee 分支缓冲整份响应。
+      signal: controller.signal,
+    });
+    if (response.status >= 300 && response.status < 400) {
+      throw new PubgApiError("遥测下载拒绝重定向", 400);
+    }
+    if (response.status === 404) {
+      throw new PubgApiError("遥测文件不存在或已过期（官方约保留 14 天）", 404);
+    }
+    if (!response.ok) {
+      throw new PubgApiError(`遥测下载失败 HTTP ${response.status}`, response.status);
+    }
+    const contentLength = Number(response.headers.get("content-length") ?? "");
+    if (Number.isFinite(contentLength) && contentLength > TELEMETRY_MAX_BYTES) {
       throw new PubgApiError("遥测文件过大", 413);
     }
-    return text;
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      try {
-        await reader.cancel();
-      } catch {
-        /* ignore */
-      }
-      throw new PubgApiError("遥测文件过大", 413);
+    if (!response.body) throw new PubgApiError("遥测下载内容为空", 500);
+    reader = response.body.getReader();
+    let total = 0;
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      // fetch 的 body 已解压，不能只依赖压缩后的 Content-Length。
+      total += value.byteLength;
+      if (total > TELEMETRY_MAX_BYTES) throw new PubgApiError("遥测文件过大", 413);
+      yield value;
     }
-    chunks.push(value);
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+    try {
+      if (reader) await reader.cancel();
+      else await response?.body?.cancel();
+    } catch {
+      // 失败或中断时流可能已经关闭。
+    }
+    reader?.releaseLock();
   }
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder("utf-8").decode(merged);
 }
 
-/**
- * 下载官方 telemetry JSON 原文（通常不计 API rate limit，无需 Bearer）。
- * 返回原始文本便于直接落盘，避免 parse 后再 stringify 双倍拷贝。
- */
+/** 由 storage 提供独立临时路径，写入使用背压且不合并下载块。 */
+export async function downloadTelemetryToFile(url: string, file: string): Promise<void> {
+  await pipeline(downloadTelemetryChunks(url), createWriteStream(file, {flags: "wx"}));
+}
+
+/** 保留文本接口供旧调用方使用，生产解析路径使用 downloadTelemetryToFile。 */
 export async function downloadTelemetryJson(url: string): Promise<string> {
-  const safeUrl = assertSafeTelemetryUrl(url);
-  const response = await fetch(safeUrl.toString(), {
-    headers: {
-      Accept: "application/json",
-      "Accept-Encoding": "gzip",
-    },
-    cache: "no-store",
-    redirect: "manual",
-  });
-
-  if (response.status >= 300 && response.status < 400) {
-    throw new PubgApiError("遥测下载拒绝重定向", 400);
+  const decoder = new TextDecoder("utf-8");
+  let text = "";
+  for await (const chunk of downloadTelemetryChunks(url)) {
+    text += decoder.decode(chunk, {stream: true});
   }
-  if (response.status === 404) {
-    throw new PubgApiError("遥测文件不存在或已过期（官方约保留 14 天）", 404);
-  }
-  if (!response.ok) {
-    throw new PubgApiError(`遥测下载失败 HTTP ${response.status}`, response.status);
-  }
-
-  return readResponseTextLimited(response, TELEMETRY_MAX_BYTES);
+  return text + decoder.decode();
 }
 
 export async function smokeTest(

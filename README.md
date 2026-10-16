@@ -228,6 +228,8 @@ curl "http://127.0.0.1:3000/api/v1/squad/stats?platform=steam&name=Nick&mates=A,
 | 遥测 / 历史库                | —      | `.data/telemetry` / `history` |
 | 车队同场统计                  | —      | `.data/squad/...`（约 20 min）   |
 
+对局内存缓存同时限制为最多 64 场、估算占用不超过 16 MiB，按最近使用情况淘汰；淘汰后仍可从磁盘恢复。过期缓存每 60 秒清理一次。容量预算只针对对局缓存，并非整个进程的内存上限。
+
 ### 本地历史与分析要点
 
 - **写入**：打开玩家概览时 upsert recent；或收藏/玩家页「同步近况」（串行、冷却，非定时 Job）
@@ -241,6 +243,10 @@ curl "http://127.0.0.1:3000/api/v1/squad/stats?platform=steam&name=Nick&mates=A,
 
 服务端从 match included 取 URL → 落盘 → 解析为精简 `events.json`（轨迹约 1Hz、击杀/倒地/救援/空投/圈、枪线）。  
 浏览器只调 BFF，禁止直拉官方超大 JSON。回放可开枪线图层；事件轴可跳转 `?tab=replay&t=`。
+
+遥测下载以流式方式写入临时文件，按事件解析，成功后替换原文；下载按解压后字节数限制为 80 MiB。单实例内重型遥测任务串行执行，最多等待 8 个任务，队列满时返回限流提示；同一账号同步执行中会拒绝重复触发。已生成报告命中缓存时，不再读取完整遥测。解析结果和回放响应仍会占用内存，实际峰值取决于事件与轨迹数量。
+
+内存相关离线回归：`npm run check:cache-memory`、`npm run check:telemetry-memory`；使用临时目录和模拟响应，不调用官方 API，也不改动真实 `.data/`。
 
 ## 限流与合规
 

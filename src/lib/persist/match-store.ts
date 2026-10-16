@@ -16,13 +16,14 @@ function withMatchWriteLock<T>(
 ): Promise<T> {
   const prev = matchWriteChains.get(matchId) ?? Promise.resolve();
   const next = prev.then(fn, fn);
-  matchWriteChains.set(
-    matchId,
-    next.then(
-      () => undefined,
-      () => undefined,
-    ),
+  const tail = next.then(
+    () => undefined,
+    () => undefined,
   );
+  matchWriteChains.set(matchId, tail);
+  void tail.then(() => {
+    if (matchWriteChains.get(matchId) === tail) matchWriteChains.delete(matchId);
+  });
   return next;
 }
 

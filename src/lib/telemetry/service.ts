@@ -1,18 +1,20 @@
 import {BizError} from "@/lib/errors";
 import {cacheDeleteIf} from "@/lib/cache";
-import {downloadTelemetryJson, PubgApiError,} from "@/lib/pubg/client";
+import {downloadTelemetryToFile, PubgApiError,} from "@/lib/pubg/client";
 import {deletePersistedReportsForMatch} from "@/lib/persist/report-store";
 import {getCachedMatch} from "@/lib/pubg/service";
 import type {PubgPlatform} from "@/lib/pubg/types";
-import {parseTelemetryJson} from "@/lib/telemetry/parser";
+import {parseTelemetryFile} from "@/lib/telemetry/parser";
+import {runTelemetryTask} from "@/lib/telemetry/task-queue";
 import {
     eventsPath,
     readMeta,
-    readParsedEvents,
-    readRawJson,
+    readParsedEventsInTask,
+    rawExists,
+    rawPath,
     writeMeta,
     writeParsedEvents,
-    writeRawJson,
+    writeRawFile,
 } from "@/lib/telemetry/storage";
 import {
     DEFAULT_SAMPLE_HZ,
@@ -33,9 +35,6 @@ async function invalidateReportsAfterParse(
   cacheDeleteIf((key) => key.startsWith("report:") && key.includes(needle));
   await deletePersistedReportsForMatch(matchId);
 }
-
-/** 进程内互斥：同一 match 并发 parse 只跑一次 */
-const inflight = new Map<string, Promise<TelemetryAssetMeta>>();
 
 export function isCurrentTelemetry(parsed: ParsedTelemetry | null): parsed is ParsedTelemetry {
   return parsed != null && parsed.parserVersion === PARSER_VERSION &&
@@ -82,37 +81,31 @@ export async function getTelemetryMeta(
 }
 
 /**
- * 幂等触发解析：ready 直接返回；pending 等待或复用 inflight；
+ * 幂等触发解析：ready 校验后返回；同场复用任务，跨场有界串行；
  * 失败可重试。force 时用已有 raw 重解析（或重新下载）。
  */
-export async function parseMatchTelemetry(
+export function parseMatchTelemetry(
+  platform: PubgPlatform,
+  matchId: string,
+  options?: { force?: boolean },
+): Promise<{ meta: TelemetryAssetMeta; cached: boolean }> {
+  return runTelemetryTask(`parse:${matchId}`, () => parseMatchTelemetryInTask(platform, matchId, options));
+}
+
+async function parseMatchTelemetryInTask(
   platform: PubgPlatform,
   matchId: string,
   options?: { force?: boolean },
 ): Promise<{ meta: TelemetryAssetMeta; cached: boolean }> {
   const existing = await readMeta(matchId);
   if (!options?.force && existing?.status === "ready") {
-    const parsed = await readParsedEvents(matchId);
+    const parsed = await readParsedEventsInTask(matchId);
     if (isCurrentTelemetry(parsed)) {
       return { meta: existing, cached: true };
     }
   }
 
-  const key = `${platform}:${matchId}`;
-  const running = inflight.get(key);
-  if (running) {
-    const meta = await running;
-    return { meta, cached: false };
-  }
-
-  const job = runParse(platform, matchId);
-  inflight.set(key, job);
-  try {
-    const meta = await job;
-    return { meta, cached: false };
-  } finally {
-    inflight.delete(key);
-  }
+  return {meta: await runParse(platform, matchId), cached: false};
 }
 
 async function runParse(
@@ -124,11 +117,27 @@ async function runParse(
   await writeMeta(pending);
 
   try {
-    let raw = await readRawJson(matchId);
+    let hasRaw = await rawExists(matchId);
     let sourceUrl = previous?.sourceUrl ?? null;
     let mapName = previous?.mapName ?? undefined;
     let durationSec = previous?.durationSec ?? undefined;
-    if (raw == null) {
+    const parseFile = (file: string) => parseTelemetryFile(file, {
+      matchId,
+      mapName,
+      durationSec,
+      sampleHz: DEFAULT_SAMPLE_HZ,
+    });
+    let parsed: ParsedTelemetry | null = null;
+    if (hasRaw) {
+      try {
+        parsed = await parseFile(rawPath(matchId));
+      } catch (error) {
+        // 旧版写入中断可能留下截断 JSON，沿用缺失 raw 时的重新下载恢复路径。
+        if (!(error instanceof SyntaxError)) throw error;
+        hasRaw = false;
+      }
+    }
+    if (!hasRaw) {
       const { value: match } = await getCachedMatch(platform, matchId);
       sourceUrl = match.telemetryUrl ?? null;
       mapName = match.mapName;
@@ -153,23 +162,13 @@ async function runParse(
     };
     await writeMeta(pending);
 
-    if (raw == null) {
-      if (!sourceUrl) throw new Error("本场对局缺少遥测下载地址");
-      const text = await downloadTelemetryJson(sourceUrl);
-      try {
-        raw = JSON.parse(text) as unknown;
-      } catch {
-        throw new PubgApiError("遥测内容不是合法 JSON", 500);
-      }
-      await writeRawJson(matchId, text);
+    if (!parsed) {
+      parsed = await writeRawFile(matchId, async (temporary) => {
+        if (!sourceUrl) throw new Error("本场对局缺少遥测下载地址");
+        await downloadTelemetryToFile(sourceUrl, temporary);
+        return parseFile(temporary);
+      });
     }
-
-    const parsed = parseTelemetryJson(raw, {
-      matchId,
-      mapName,
-      durationSec,
-      sampleHz: DEFAULT_SAMPLE_HZ,
-    });
 
     const evPath = await writeParsedEvents(matchId, parsed);
     const ready: TelemetryAssetMeta = {
@@ -223,34 +222,39 @@ export type TelemetryEventsQuery = {
 /**
  * 统一读取遥测；可自动解析并升级旧格式，原始数据始终留在服务端。
  */
-export async function loadMatchTelemetry(
+export function loadMatchTelemetry(
   platform: PubgPlatform,
   matchId: string,
   autoParse = true,
+): Promise<{meta: TelemetryAssetMeta | null; parsed: ParsedTelemetry | null}> {
+  return runTelemetryTask(`load:${matchId}:${autoParse}`, () => loadMatchTelemetryInTask(platform, matchId, autoParse));
+}
+
+async function loadMatchTelemetryInTask(
+  platform: PubgPlatform,
+  matchId: string,
+  autoParse: boolean,
 ): Promise<{meta: TelemetryAssetMeta | null; parsed: ParsedTelemetry | null}> {
   let meta = await readMeta(matchId);
 
   if (!meta || meta.status === "none" || meta.status === "failed") {
     if (autoParse) {
-      const result = await parseMatchTelemetry(platform, matchId);
+      const result = await parseMatchTelemetryInTask(platform, matchId);
       meta = result.meta;
     }
   } else if (meta.status === "pending") {
-    const key = `${platform}:${matchId}`;
-    const running = inflight.get(key);
-    if (running) {
-      meta = await running;
-    } else if (autoParse) {
-      const result = await parseMatchTelemetry(platform, matchId);
+    if (autoParse) {
+      const result = await parseMatchTelemetryInTask(platform, matchId);
       meta = result.meta;
     }
   }
 
-  let parsed = meta?.status === "ready" ? await readParsedEvents(matchId) : null;
+  let parsed = meta?.status === "ready" ? await readParsedEventsInTask(matchId) : null;
   if (meta?.status === "ready" && !isCurrentTelemetry(parsed) && autoParse) {
-    const result = await parseMatchTelemetry(platform, matchId);
+    parsed = null;
+    const result = await parseMatchTelemetryInTask(platform, matchId, {force: true});
     meta = result.meta;
-    parsed = meta.status === "ready" ? await readParsedEvents(matchId) : null;
+    parsed = meta.status === "ready" ? await readParsedEventsInTask(matchId) : null;
   }
   return {meta, parsed};
 }

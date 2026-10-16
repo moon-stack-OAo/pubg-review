@@ -20,13 +20,11 @@ function withReportWriteLock<T>(
   const key = `${matchId}:${accountId}`;
   const prev = reportWriteChains.get(key) ?? Promise.resolve();
   const next = prev.then(fn, fn);
-  reportWriteChains.set(
-    key,
-    next.then(
-      () => undefined,
-      () => undefined,
-    ),
-  );
+  const release = () => {
+    if (reportWriteChains.get(key) === tail) reportWriteChains.delete(key);
+  };
+  const tail = next.then(release, release);
+  reportWriteChains.set(key, tail);
   return next;
 }
 

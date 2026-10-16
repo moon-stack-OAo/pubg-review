@@ -1,7 +1,7 @@
 import {aggregateWeaknessTags, type WeaknessTagSummary,} from "@/lib/analysis/player-analysis-core";
 import {buildMatchReport} from "@/lib/analysis/report-service";
 import type {ReportTagCode} from "@/lib/analysis/report-engine";
-import {cacheDelete, cacheDeleteByPrefix, cacheGet, cacheGetOrSet, cacheSet, TTL,} from "@/lib/cache";
+import {CACHE_LIMITS, cacheDelete, cacheDeleteByPrefix, cacheGet, cacheGetOrSet, cacheSet, TTL,} from "@/lib/cache";
 import {BizError} from "@/lib/errors";
 import type {HistoryMatchRecord} from "@/lib/history/types";
 import {persistDashboardHistory} from "@/lib/history/persist";
@@ -212,6 +212,28 @@ export async function getCachedSeason(
   }
 }
 
+/** 对已归一化的对局估算保留成本；不创建整份 JSON 或遍历其他缓存类型。 */
+export function estimateMatchCacheBytes(match: PubgMatchDetail): number {
+  const stringBytes = (value: string | null | undefined) => (value?.length ?? 0) * 2;
+  let bytes = 4096 + stringBytes(match.matchId) + stringBytes(match.shard) +
+    stringBytes(match.mapName) + stringBytes(match.gameMode) + stringBytes(match.matchType) +
+    stringBytes(match.playedAt) + stringBytes(match.telemetryUrl);
+  for (const roster of match.rosters) {
+    bytes += 256 + stringBytes(roster.id);
+    for (const participant of roster.participants) {
+      // 包含对象、属性、数组槽位与数字装箱的保守余量；字符串按 UTF-16 计。
+      bytes += 1024 + stringBytes(participant.accountId) + stringBytes(participant.name);
+      if (bytes > CACHE_LIMITS.matchMaxBytes) return bytes;
+    }
+    if (bytes > CACHE_LIMITS.matchMaxBytes) return bytes;
+  }
+  return bytes;
+}
+
+function cacheMatch(key: string, match: PubgMatchDetail): void {
+  cacheSet(key, match, TTL.match, { category: "match", estimatedBytes: estimateMatchCacheBytes(match) });
+}
+
 export async function getCachedMatch(
   platform: PubgPlatform,
   matchId: string,
@@ -229,7 +251,7 @@ export async function getCachedMatch(
   const job = (async () => {
     const disk = await readPersistedMatch(matchId, platform);
     if (disk && "matchType" in disk) {
-      cacheSet(key, disk, TTL.match);
+      cacheMatch(key, disk);
       return { value: disk, cached: true };
     }
 
@@ -239,12 +261,12 @@ export async function getCachedMatch(
     } catch (error) {
       // 官方已无法获取的旧对局仍保留本地可读能力，只是不展示比赛类型。
       if (disk) {
-        cacheSet(key, disk, TTL.match);
+        cacheMatch(key, disk);
         return { value: disk, cached: true };
       }
       throw error;
     }
-    cacheSet(key, value, TTL.match);
+    cacheMatch(key, value);
     try {
       await writePersistedMatch(value, platform);
     } catch {

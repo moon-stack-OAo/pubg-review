@@ -1,4 +1,5 @@
 import {resolveVehicle, shouldSkipVehicleId} from "@/lib/pubg/vehicles";
+import {readTelemetryArray} from "@/lib/telemetry/json-stream";
 import {
     DEFAULT_SAMPLE_HZ,
     GUNLINE_DAMAGE_PER_SEC,
@@ -102,28 +103,6 @@ function findMatchStartMs(events: RawEvent[]): number | null {
   return null;
 }
 
-/**
- * 对每位玩家按 ~sampleHz 采样位置（默认 1Hz）。
- * LogPlayerPosition 官方约每秒一条，仍做桶去重以防噪声。
- */
-function samplePositions(
-  rawPositions: Array<{ t: number; accountId: string; x: number; y: number; z: number }>,
-  sampleHz: number,
-): TelemetryPosition[] {
-  const interval = sampleHz > 0 ? 1 / sampleHz : 1;
-  const lastBucket = new Map<string, number>();
-  const out: TelemetryPosition[] = [];
-
-  for (const p of rawPositions) {
-    const bucket = Math.floor(p.t / interval);
-    const key = `${p.accountId}:${bucket}`;
-    if (lastBucket.has(key)) continue;
-    lastBucket.set(key, bucket);
-    out.push(p);
-  }
-  return out;
-}
-
 export type ParseOptions = {
   matchId: string;
   mapName?: string;
@@ -140,17 +119,38 @@ export function parseTelemetryJson(
   }
 
   const events = raw as RawEvent[];
-  const matchStartMs = findMatchStartMs(events);
+  const parser = createTelemetryParser(options, findMatchStartMs(events));
+  events.forEach((ev, index) => parser.consume(ev, index));
+  return parser.finish();
+}
+
+export async function parseTelemetryFile(file: string, options: ParseOptions): Promise<ParsedTelemetry> {
+  let firstTimestamp: number | null = null;
+  let matchStartMs: number | null = null;
+  for await (const value of readTelemetryArray(file)) {
+    const ev = value as RawEvent;
+    const ms = typeof ev._D === "string" ? Date.parse(ev._D) : NaN;
+    if (!Number.isFinite(ms)) continue;
+    firstTimestamp ??= ms;
+    if (ev._T === "LogMatchStart") {
+      matchStartMs = ms;
+      break;
+    }
+  }
+  const parser = createTelemetryParser(options, matchStartMs ?? firstTimestamp);
+  let index = 0;
+  for await (const value of readTelemetryArray(file)) {
+    parser.consume(value as RawEvent, index++);
+  }
+  return parser.finish();
+}
+
+function createTelemetryParser(options: ParseOptions, matchStartMs: number | null) {
   const sampleHz = options.sampleHz ?? DEFAULT_SAMPLE_HZ;
+  const interval = sampleHz > 0 ? 1 / sampleHz : 1;
 
   const playersMap = new Map<string, TelemetryPlayer>();
-  const rawPositions: Array<{
-    t: number;
-    accountId: string;
-    x: number;
-    y: number;
-    z: number;
-  }> = [];
+  const positionBuckets = new Map<string, TelemetryPosition>();
   const gameEvents: TelemetryEvent[] = [];
   const zones: TelemetryZone[] = [];
   const rawGunlines: TelemetryGunline[] = [];
@@ -298,7 +298,7 @@ export function parseTelemetryJson(
     });
   };
 
-  for (const [sourceEventId, ev] of events.entries()) {
+  const consume = (ev: RawEvent, sourceEventId: number) => {
     const type = str(ev._T);
 
     if (type === "LogMatchStart") {
@@ -308,12 +308,12 @@ export function parseTelemetryJson(
         const w = wrap as { character?: unknown };
         upsertPlayer(asChar(w.character ?? wrap));
       }
-      continue;
+      return;
     }
 
     if (type === "LogPlayerCreate") {
       upsertPlayer(asChar(ev.character));
-      continue;
+      return;
     }
 
     if (type === "LogPlayerPosition") {
@@ -321,17 +321,16 @@ export function parseTelemetryJson(
       upsertPlayer(c);
       const loc = locOf(c);
       const accountId = str(c?.accountId);
-      if (!loc || !accountId || accountId.startsWith("ai.")) continue;
+      if (!loc || !accountId || accountId.startsWith("ai.")) return;
       const t = resolveT(ev, matchStartMs, num(ev.elapsedTime, -1) >= 0 ? num(ev.elapsedTime) : undefined);
       maxT = Math.max(maxT, t);
-      rawPositions.push({
-        t,
-        accountId,
-        x: loc.x,
-        y: loc.y,
-        z: loc.z,
-      });
-      continue;
+      const key = `${accountId}:${Math.floor(t / interval)}`;
+      const previous = positionBuckets.get(key);
+      // 与先稳定排序再采样一致：保留桶内最早时间，相同时间保留原顺序第一条。
+      if (!previous || t < previous.t) {
+        positionBuckets.set(key, {t, accountId, x: loc.x, y: loc.y, z: loc.z});
+      }
+      return;
     }
 
     if (type === "LogPlayerKillV2" || type === "LogPlayerKill") {
@@ -397,7 +396,7 @@ export function parseTelemetryJson(
         y: loc?.y ?? null,
       });
       pushGunline(t, killer, victim, "kill");
-      continue;
+      return;
     }
 
     if (type === "LogPlayerMakeGroggy") {
@@ -420,7 +419,7 @@ export function parseTelemetryJson(
         y: loc?.y ?? null,
       });
       pushGunline(t, attacker, victim, "knock");
-      continue;
+      return;
     }
 
     if (type === "LogPlayerTakeDamage") {
@@ -439,12 +438,12 @@ export function parseTelemetryJson(
         !category.startsWith("Damage_Explosion") &&
         category !== "Damage_Molotov"
       ) {
-        continue;
+        return;
       }
       const t = resolveT(ev, matchStartMs);
       maxT = Math.max(maxT, t);
       pushGunline(t, attacker, victim, "damage");
-      continue;
+      return;
     }
 
     if (type === "LogPlayerRevive") {
@@ -464,7 +463,7 @@ export function parseTelemetryJson(
         x: loc?.x ?? null,
         y: loc?.y ?? null,
       });
-      continue;
+      return;
     }
 
     if (type === "LogCarePackageLand" || type === "LogCarePackageSpawn") {
@@ -480,7 +479,7 @@ export function parseTelemetryJson(
         y: Number.isFinite(y) ? y : null,
         label: type === "LogCarePackageLand" ? "空投落地" : "空投生成",
       });
-      continue;
+      return;
     }
 
     if (type === "LogVehicleRide") {
@@ -491,7 +490,7 @@ export function parseTelemetryJson(
       const seat =
         typeof ev.seatIndex === "number" ? ev.seatIndex : null;
       pushVehicle(t, "ride", character, asVeh(ev.vehicle), seat);
-      continue;
+      return;
     }
 
     if (type === "LogVehicleLeave") {
@@ -502,7 +501,7 @@ export function parseTelemetryJson(
       const seat =
         typeof ev.seatIndex === "number" ? ev.seatIndex : null;
       pushVehicle(t, "leave", character, asVeh(ev.vehicle), seat);
-      continue;
+      return;
     }
 
     if (type === "LogVehicleDestroy") {
@@ -511,12 +510,12 @@ export function parseTelemetryJson(
       const t = resolveT(ev, matchStartMs);
       maxT = Math.max(maxT, t);
       pushVehicle(t, "destroy", attacker, asVeh(ev.vehicle), null);
-      continue;
+      return;
     }
 
     if (type === "LogGameStatePeriodic") {
       const gs = ev.gameState as Record<string, unknown> | undefined;
-      if (!gs) continue;
+      if (!gs) return;
       const t = resolveT(
         ev,
         matchStartMs,
@@ -545,62 +544,61 @@ export function parseTelemetryJson(
           radius: blueR,
         });
       }
-      continue;
+      return;
     }
-  }
-
-  // 圈变化采样：同类型约每 5 秒保留一条，降低体积
-  const sampledZones = sampleZones(zones, 5);
-
-  const positions = samplePositions(
-    rawPositions.sort((a, b) => a.t - b.t || a.accountId.localeCompare(b.accountId)),
-    sampleHz,
-  );
-
-  gameEvents.sort((a, b) => a.t - b.t);
-  sampledZones.sort((a, b) => a.t - b.t);
-  const gunlines = sampleGunlines(rawGunlines);
-  vehicles.sort((a, b) => a.t - b.t);
-  friendlyFire.sort((a, b) => a.t - b.t || a.sourceEventId - b.sourceEventId);
-
-  // 官方 match.duration 偶发异常偏大；优先用事件推算的 maxT
-  const fromEvents = Math.ceil(maxT);
-  const fromMatch =
-    options.durationSec && options.durationSec > 0 ? options.durationSec : 0;
-  const durationSec =
-    fromEvents > 0
-      ? fromMatch > 0 && fromMatch <= fromEvents * 1.25
-        ? fromMatch
-        : fromEvents
-      : fromMatch || 0;
-
-  if (!mapName) {
-    mapName = "Unknown";
-  }
-
-  return {
-    matchId: options.matchId,
-    mapName,
-    durationSec,
-    parserVersion: PARSER_VERSION,
-    parsedAt: new Date().toISOString(),
-    players: Array.from(playersMap.values()).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    ),
-    positions,
-    events: gameEvents,
-    zones: sampledZones,
-    gunlines,
-    vehicles,
-    friendlyFire,
   };
+
+  const finish = (): ParsedTelemetry => {
+    // 圈变化采样：同类型约每 5 秒保留一条，降低体积。
+    const sampledZones = sampleZones(zones, 5);
+    const positions = Array.from(positionBuckets.values())
+      .sort((a, b) => a.t - b.t || a.accountId.localeCompare(b.accountId));
+    positionBuckets.clear();
+
+    gameEvents.sort((a, b) => a.t - b.t);
+    sampledZones.sort((a, b) => a.t - b.t);
+    const gunlines = sampleGunlines(rawGunlines);
+    vehicles.sort((a, b) => a.t - b.t);
+    friendlyFire.sort((a, b) => a.t - b.t || a.sourceEventId - b.sourceEventId);
+
+    // 官方 match.duration 偶发异常偏大；优先用事件推算的 maxT。
+    const fromEvents = Math.ceil(maxT);
+    const fromMatch =
+      options.durationSec && options.durationSec > 0 ? options.durationSec : 0;
+    const durationSec =
+      fromEvents > 0
+        ? fromMatch > 0 && fromMatch <= fromEvents * 1.25
+          ? fromMatch
+          : fromEvents
+        : fromMatch || 0;
+
+    if (!mapName) mapName = "Unknown";
+
+    return {
+      matchId: options.matchId,
+      mapName,
+      durationSec,
+      parserVersion: PARSER_VERSION,
+      parsedAt: new Date().toISOString(),
+      players: Array.from(playersMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+      positions,
+      events: gameEvents,
+      zones: sampledZones,
+      gunlines,
+      vehicles,
+      friendlyFire,
+    };
+  };
+  return {consume, finish};
 }
 
 /**
  * kill/knock 全保留；damage 按秒限流，避免枪线过密卡顿。
  */
 function sampleGunlines(lines: TelemetryGunline[]): TelemetryGunline[] {
-  const sorted = [...lines].sort(
+  const sorted = lines.sort(
     (a, b) => a.t - b.t || (a.kind === "damage" ? 1 : -1),
   );
   const damageCount = new Map<number, number>();

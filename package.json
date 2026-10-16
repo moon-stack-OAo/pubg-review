@@ -12,7 +12,9 @@
     "start:standalone": "node dist/pubg-review/server.js",
     "lint": "eslint",
     "check:map-coords": "node scripts/check-map-coords.mjs",
-    "check:friendly-fire": "node scripts/check-friendly-fire.mjs"
+    "check:friendly-fire": "node scripts/check-friendly-fire.mjs",
+    "check:cache-memory": "node scripts/check-cache-memory.mjs",
+    "check:telemetry-memory": "node scripts/check-telemetry-memory.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

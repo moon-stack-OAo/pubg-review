@@ -9,6 +9,24 @@
 ### Added
 
 - MCP 友伤工具 `get_match_friendly_fire`：不抽样的伤害明细、击倒、官方击杀归属与终结行为；支持玩家方向筛选、配对/玩家聚合和明细分页
+- 缓存与遥测内存离线回归：覆盖容量淘汰、同步互斥、遥测任务队列、流式解析、超限清理和小堆解析验证
+
+### Changed
+
+- `parserVersion` → **1.3.0**（含载具与友伤）；旧 `events.json` 自动升级，优先使用本地 raw 离线解析，不依赖已过期的官方对局
+
+### Fixed
+
+- 遥测下载改为流式写入临时文件、逐事件解析，避免整份原文与完整事件对象同时驻留；下载和校验成功后再替换原文件
+- 重型遥测任务全局串行、同场复用，最多等待 8 个任务；超限或失败时清理临时文件并继续处理后续任务
+- 对局内存缓存限制为最多 64 场、估算预算 16 MiB，使用 LRU 淘汰并每 60 秒清理过期引用，保留磁盘恢复能力
+- 复盘报告命中缓存时跳过完整遥测读取；遥测缺失或损坏时仍可降级生成基础报告
+- 同一账号同步执行中拒绝重复触发，任务结束后释放保护；清理对局、历史、昵称与报告写锁的残留引用
+
+## [0.1.1] - 2026-10-16
+
+### Added
+
 - 战队资料：玩家搜索与 MCP 返回 `clanId`，新增战队详情 BFF、缓存与玩家页战队卡片
 - 可选 AI 赛季评价：按赛季与模式读取缓存、手动生成或重新生成，复用 AI 脱敏、限流与落盘能力
 - 回放队伍列表：展示存活、倒地与淘汰状态，点选任意玩家跟随，并支持 8 倍速播放
@@ -26,7 +44,7 @@
 - 搜索平台选择改为原生单选框，完善键盘焦点与高对比度显示
 - 独立地图中心与资料页暂停开放，移除导航入口，保留对局回放底图
 - ESLint 忽略 `dist/` 打包产物，避免本地打包后重复检查生成代码
-- `parserVersion` → **1.3.0**（含载具与友伤）；旧 `events.json` 自动升级，优先使用本地 raw 离线解析，不依赖已过期的官方对局
+- `parserVersion` → **1.2.0**（含载具）；旧 `events.json` 无 `vehicles` 时自动用 raw 重 parse
 - 地图名、对局模式等展示文案中文化（UI / 分享 / 回放等统一走标签映射）
 - 收藏页「同步近况」结果提示改为单独一行，不再挤在操作按钮列
 - 移除未再引用的 `SyncHistoryButton` / `RefreshButton`（已由 `PlayerHeadActions` 承接）
@@ -79,6 +97,8 @@
 - 开启 MCP 后强制校验 Bearer Token（未配置 `MCP_TOKEN` → `503`，错误 / 缺失 → `401`）
 - 公网部署仍建议配合防火墙限 IP；勿将 Token 写入仓库
 
-[Unreleased]: https://github.com/moon-stack-OAo/pubg-review/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/moon-stack-OAo/pubg-review/compare/v0.1.1...HEAD
+
+[0.1.1]: https://github.com/moon-stack-OAo/pubg-review/releases/tag/v0.1.1
 
 [0.1.0]: https://github.com/moon-stack-OAo/pubg-review/releases/tag/v0.1.0

@@ -1,71 +1,148 @@
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
+  matchBytes: number | null;
 };
 
-const store = new Map<string, CacheEntry<unknown>>();
-const inflight = new Map<string, Promise<unknown>>();
-const MAX_ENTRIES = 2000;
+export const CACHE_LIMITS = {
+  maxEntries: 2000,
+  matchMaxEntries: 64,
+  matchMaxBytes: 16 * 1024 * 1024,
+  cleanupIntervalMs: 60_000,
+} as const;
 
-function evictIfNeeded(): void {
-  if (store.size < MAX_ENTRIES) return;
-  const now = Date.now();
-  for (const [k, e] of store) {
-    if (now > e.expiresAt) store.delete(k);
+type CacheSetOptions = { category: "match"; estimatedBytes: number };
+type MemoryCacheOptions = {
+  maxEntries?: number;
+  matchMaxEntries?: number;
+  matchMaxBytes?: number;
+  cleanupIntervalMs?: number;
+  clock?: () => number;
+};
+
+export class MemoryCache {
+  private readonly store = new Map<string, CacheEntry<unknown>>();
+  private readonly limits;
+  private readonly clock: () => number;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private matchEntries = 0;
+  private matchBytes = 0;
+
+  constructor(options: MemoryCacheOptions = {}) {
+    this.limits = { ...CACHE_LIMITS, ...options };
+    this.clock = options.clock ?? Date.now;
+    for (const limit of [this.limits.maxEntries, this.limits.matchMaxEntries,
+      this.limits.matchMaxBytes, this.limits.cleanupIntervalMs]) {
+      if (!Number.isSafeInteger(limit) || limit <= 0) {
+        throw new Error("缓存容量和清理间隔必须为正整数");
+      }
+    }
   }
-  if (store.size < MAX_ENTRIES) return;
-  const overflow = store.size - MAX_ENTRIES + 1;
-  let n = 0;
-  for (const k of store.keys()) {
-    store.delete(k);
-    if (++n >= overflow) break;
+
+  get stats() {
+    return { entries: this.store.size, matchEntries: this.matchEntries, matchBytes: this.matchBytes };
+  }
+
+  get<T>(key: string): T | null {
+    const hit = this.store.get(key);
+    if (!hit) return null;
+    if (this.clock() >= hit.expiresAt) {
+      this.delete(key);
+      return null;
+    }
+    this.store.delete(key);
+    this.store.set(key, hit);
+    return hit.value as T;
+  }
+
+  set<T>(key: string, value: T, ttlMs: number, options?: CacheSetOptions): boolean {
+    this.delete(key);
+    const expiresAt = this.clock() + ttlMs;
+    if (!Number.isFinite(ttlMs) || ttlMs <= 0 || !Number.isFinite(expiresAt)) return false;
+    if (options && (!Number.isSafeInteger(options.estimatedBytes) || options.estimatedBytes < 0)) return false;
+    const matchBytes = options ? options.estimatedBytes + key.length * 2 + 128 : null;
+    if (matchBytes !== null && (!Number.isSafeInteger(matchBytes) ||
+      matchBytes <= 0 || matchBytes > this.limits.matchMaxBytes)) return false;
+
+    this.pruneExpired();
+    if (matchBytes !== null) {
+      for (const [oldKey, entry] of this.store) {
+        if (this.matchEntries < this.limits.matchMaxEntries &&
+          this.matchBytes + matchBytes <= this.limits.matchMaxBytes) break;
+        if (entry.matchBytes !== null) this.delete(oldKey);
+      }
+    }
+    while (this.store.size >= this.limits.maxEntries) {
+      this.delete(this.store.keys().next().value!);
+    }
+    this.store.set(key, { value, expiresAt, matchBytes });
+    if (matchBytes !== null) {
+      this.matchEntries += 1;
+      this.matchBytes += matchBytes;
+    }
+    if (!this.timer) {
+      this.timer = setInterval(() => this.pruneExpired(), this.limits.cleanupIntervalMs);
+      this.timer.unref();
+    }
+    return true;
+  }
+
+  delete(key: string): void {
+    const entry = this.store.get(key);
+    if (!entry) return;
+    this.store.delete(key);
+    if (entry.matchBytes !== null) {
+      this.matchEntries -= 1;
+      this.matchBytes -= entry.matchBytes;
+    }
+    if (!this.store.size && this.timer) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+    }
+  }
+
+  pruneExpired(): void {
+    const now = this.clock();
+    for (const [key, entry] of this.store) {
+      if (now >= entry.expiresAt) this.delete(key);
+    }
+  }
+
+  deleteIf(pred: (key: string) => boolean): number {
+    let count = 0;
+    for (const key of this.store.keys()) {
+      if (pred(key)) {
+        this.delete(key);
+        count += 1;
+      }
+    }
+    return count;
   }
 }
+
+const cache = new MemoryCache();
+const inflight = new Map<string, Promise<unknown>>();
 
 export function cacheGet<T>(key: string): T | null {
-  const hit = store.get(key);
-  if (!hit) return null;
-  if (Date.now() > hit.expiresAt) {
-    store.delete(key);
-    return null;
-  }
-  return hit.value as T;
+  return cache.get<T>(key);
 }
 
-export function cacheSet<T>(key: string, value: T, ttlMs: number): void {
-  evictIfNeeded();
-  store.set(key, {
-    value,
-    expiresAt: Date.now() + ttlMs,
-  });
+export function cacheSet<T>(key: string, value: T, ttlMs: number, options?: CacheSetOptions): void {
+  cache.set(key, value, ttlMs, options);
 }
 
 export function cacheDelete(key: string): void {
-  store.delete(key);
+  cache.delete(key);
 }
 
 /** 按前缀删除缓存（用于玩家刷新时失效相关条目） */
 export function cacheDeleteByPrefix(prefix: string): number {
-  let count = 0;
-  for (const key of store.keys()) {
-    if (key.startsWith(prefix)) {
-      store.delete(key);
-      count += 1;
-    }
-  }
-  return count;
+  return cache.deleteIf((key) => key.startsWith(prefix));
 }
 
 /** 按谓词删除缓存 */
 export function cacheDeleteIf(pred: (key: string) => boolean): number {
-  let count = 0;
-  for (const key of store.keys()) {
-    if (pred(key)) {
-      store.delete(key);
-      count += 1;
-    }
-  }
-  return count;
+  return cache.deleteIf(pred);
 }
 
 export async function cacheGetOrSet<T>(

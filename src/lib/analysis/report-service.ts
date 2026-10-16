@@ -1,3 +1,4 @@
+import {promises as fs} from "fs";
 import {generateNoTelemetryReport, type MatchReport, RULE_VERSION_NO_TELEMETRY,} from "@/lib/analysis/report-engine";
 import {generateTelemetryReport, RULE_VERSION_TELEMETRY,} from "@/lib/analysis/report-engine-telemetry";
 import {cacheDelete, cacheDeleteIf, cacheGet, cacheSet, TTL} from "@/lib/cache";
@@ -10,8 +11,7 @@ import {
 } from "@/lib/persist/report-store";
 import {getCachedMatch} from "@/lib/pubg/service";
 import type {PubgPlatform} from "@/lib/pubg/types";
-import {getTelemetryStatus} from "@/lib/telemetry/service";
-import {readParsedEvents} from "@/lib/telemetry/storage";
+import {eventsPath, readMeta, readParsedEvents} from "@/lib/telemetry/storage";
 
 function reportCacheKey(
   platform: PubgPlatform,
@@ -23,12 +23,17 @@ function reportCacheKey(
 }
 
 /**
- * 仅读本地已解析 events；不触发下载。ready 且文件存在才返回。
+ * 只读轻量元信息与文件状态；报告缓存命中时不读取完整 events。
  */
-async function tryLoadReadyTelemetry(matchId: string) {
-  const status = await getTelemetryStatus(matchId);
-  if (status !== "ready") return null;
-  return readParsedEvents(matchId);
+async function hasReadyTelemetry(matchId: string): Promise<boolean> {
+  const meta = await readMeta(matchId);
+  if (meta?.status !== "ready") return false;
+  try {
+    const stat = await fs.stat(eventsPath(matchId));
+    return stat.isFile() && stat.size > 0;
+  } catch {
+    return false;
+  }
 }
 
 function hydrateReportCache(
@@ -84,8 +89,8 @@ export async function buildMatchReport(
     throw new BizError("matchId 不能为空");
   }
 
-  const telemetry = await tryLoadReadyTelemetry(matchId);
-  const ruleVersion = telemetry
+  const telemetryReady = await hasReadyTelemetry(matchId);
+  const ruleVersion = telemetryReady
     ? RULE_VERSION_TELEMETRY
     : RULE_VERSION_NO_TELEMETRY;
   const key = reportCacheKey(platform, matchId, id, ruleVersion);
@@ -115,8 +120,10 @@ export async function buildMatchReport(
 
   try {
     let report: MatchReport;
-    if (telemetry) {
+    if (telemetryReady) {
       try {
+        const telemetry = await readParsedEvents(matchId);
+        if (!telemetry) throw new Error("精简遥测文件不可用");
         report = generateTelemetryReport(match, id, participant, telemetry);
       } catch {
         report = generateNoTelemetryReport(match, id, participant);
