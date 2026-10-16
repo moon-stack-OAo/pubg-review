@@ -7,7 +7,6 @@ import type {PubgPlatform} from "@/lib/pubg/types";
 import {parseTelemetryJson} from "@/lib/telemetry/parser";
 import {
     eventsPath,
-    rawExists,
     readMeta,
     readParsedEvents,
     readRawJson,
@@ -37,6 +36,12 @@ async function invalidateReportsAfterParse(
 
 /** 进程内互斥：同一 match 并发 parse 只跑一次 */
 const inflight = new Map<string, Promise<TelemetryAssetMeta>>();
+
+export function isCurrentTelemetry(parsed: ParsedTelemetry | null): parsed is ParsedTelemetry {
+  return parsed != null && parsed.parserVersion === PARSER_VERSION &&
+    Array.isArray(parsed.gunlines) && Array.isArray(parsed.vehicles) &&
+    Array.isArray(parsed.friendlyFire);
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -88,13 +93,7 @@ export async function parseMatchTelemetry(
   const existing = await readMeta(matchId);
   if (!options?.force && existing?.status === "ready") {
     const parsed = await readParsedEvents(matchId);
-    // parser 升级（如新增 gunlines / vehicles）时自动用已有 raw 重解析
-    const stale =
-      !parsed ||
-      parsed.parserVersion !== PARSER_VERSION ||
-      !Array.isArray(parsed.gunlines) ||
-      !Array.isArray(parsed.vehicles);
-    if (parsed && !stale) {
+    if (isCurrentTelemetry(parsed)) {
       return { meta: existing, cached: true };
     }
   }
@@ -120,37 +119,42 @@ async function runParse(
   platform: PubgPlatform,
   matchId: string,
 ): Promise<TelemetryAssetMeta> {
+  const previous = await readMeta(matchId);
   let pending = emptyMeta(matchId, platform, "pending");
   await writeMeta(pending);
 
   try {
-    const { value: match } = await getCachedMatch(platform, matchId);
-    const sourceUrl = match.telemetryUrl;
-
-    if (!sourceUrl) {
-      const failed = emptyMeta(matchId, platform, "none", {
-        errorMessage: "本场对局无遥测资产（可能为自定义局或官方未附带）",
-        mapName: match.mapName,
-        durationSec: match.durationSec,
-      });
-      await writeMeta(failed);
-      return failed;
+    let raw = await readRawJson(matchId);
+    let sourceUrl = previous?.sourceUrl ?? null;
+    let mapName = previous?.mapName ?? undefined;
+    let durationSec = previous?.durationSec ?? undefined;
+    if (raw == null) {
+      const { value: match } = await getCachedMatch(platform, matchId);
+      sourceUrl = match.telemetryUrl ?? null;
+      mapName = match.mapName;
+      durationSec = match.durationSec;
+      if (!sourceUrl) {
+        const failed = emptyMeta(matchId, platform, "none", {
+          errorMessage: "本场对局无遥测资产（可能为自定义局或官方未附带）",
+          mapName,
+          durationSec,
+        });
+        await writeMeta(failed);
+        return failed;
+      }
     }
 
     pending = {
       ...pending,
       sourceUrl,
-      mapName: match.mapName,
-      durationSec: match.durationSec,
+      mapName,
+      durationSec,
       updatedAt: nowIso(),
     };
     await writeMeta(pending);
 
-    let raw: unknown = null;
-    if (await rawExists(matchId)) {
-      raw = await readRawJson(matchId);
-    }
     if (raw == null) {
+      if (!sourceUrl) throw new Error("本场对局缺少遥测下载地址");
       const text = await downloadTelemetryJson(sourceUrl);
       try {
         raw = JSON.parse(text) as unknown;
@@ -162,8 +166,8 @@ async function runParse(
 
     const parsed = parseTelemetryJson(raw, {
       matchId,
-      mapName: match.mapName,
-      durationSec: match.durationSec,
+      mapName,
+      durationSec,
       sampleHz: DEFAULT_SAMPLE_HZ,
     });
 
@@ -217,18 +221,17 @@ export type TelemetryEventsQuery = {
 };
 
 /**
- * 返回精简事件流；未解析时可自动触发 parse。
- * 浏览器只应调用本接口，禁止直拉官方原始 telemetry。
+ * 统一读取遥测；可自动解析并升级旧格式，原始数据始终留在服务端。
  */
-export async function getTelemetryEvents(
+export async function loadMatchTelemetry(
   platform: PubgPlatform,
   matchId: string,
-  query: TelemetryEventsQuery = {},
-): Promise<TelemetryEventsPayload> {
+  autoParse = true,
+): Promise<{meta: TelemetryAssetMeta | null; parsed: ParsedTelemetry | null}> {
   let meta = await readMeta(matchId);
 
   if (!meta || meta.status === "none" || meta.status === "failed") {
-    if (query.autoParse !== false) {
+    if (autoParse) {
       const result = await parseMatchTelemetry(platform, matchId);
       meta = result.meta;
     }
@@ -237,11 +240,27 @@ export async function getTelemetryEvents(
     const running = inflight.get(key);
     if (running) {
       meta = await running;
-    } else if (query.autoParse !== false) {
+    } else if (autoParse) {
       const result = await parseMatchTelemetry(platform, matchId);
       meta = result.meta;
     }
   }
+
+  let parsed = meta?.status === "ready" ? await readParsedEvents(matchId) : null;
+  if (meta?.status === "ready" && !isCurrentTelemetry(parsed) && autoParse) {
+    const result = await parseMatchTelemetry(platform, matchId);
+    meta = result.meta;
+    parsed = meta.status === "ready" ? await readParsedEvents(matchId) : null;
+  }
+  return {meta, parsed};
+}
+
+export async function getTelemetryEvents(
+  platform: PubgPlatform,
+  matchId: string,
+  query: TelemetryEventsQuery = {},
+): Promise<TelemetryEventsPayload> {
+  const {meta, parsed} = await loadMatchTelemetry(platform, matchId, query.autoParse !== false);
 
   if (!meta) {
     return {
@@ -277,7 +296,6 @@ export async function getTelemetryEvents(
     };
   }
 
-  const parsed = await readParsedEvents(matchId);
   if (!parsed) {
     return {
       matchId,

@@ -5,6 +5,7 @@ import {
     type ParsedTelemetry,
     PARSER_VERSION,
     type TelemetryEvent,
+    type TelemetryFriendlyFireEvent,
     type TelemetryGunline,
     type TelemetryPlayer,
     type TelemetryPosition,
@@ -154,6 +155,7 @@ export function parseTelemetryJson(
   const zones: TelemetryZone[] = [];
   const rawGunlines: TelemetryGunline[] = [];
   const vehicles: TelemetryVehicleEvent[] = [];
+  const friendlyFire: TelemetryFriendlyFireEvent[] = [];
   let mapName = options.mapName ?? "";
   /** 仅由事件推算，勿用官方 duration 初始化（偶发异常偏大） */
   let maxT = 0;
@@ -250,7 +252,53 @@ export function parseTelemetryJson(
     }
   };
 
-  for (const ev of events) {
+  const playerSnapshot = (c: Char | null): TelemetryPlayer | null => {
+    const accountId = str(c?.accountId);
+    if (!accountId || accountId === "None" || accountId.startsWith("ai.")) return null;
+    const teamId = num(c?.teamId, -1);
+    return {
+      accountId,
+      name: str(c?.name) || playersMap.get(accountId)?.name || "Unknown",
+      teamId: teamId >= 0 ? teamId : null,
+    };
+  };
+
+  const pushFriendlyFire = (
+    ev: RawEvent,
+    sourceEventId: number,
+    type: TelemetryFriendlyFireEvent["type"],
+    attacker: TelemetryPlayer | null,
+    victim: TelemetryPlayer | null,
+    damageInfo: Record<string, unknown> = ev,
+    officialIds: string[] = [],
+  ) => {
+    if (!attacker || !victim || attacker.accountId === victim.accountId) return;
+    const official = type === "kill" && officialIds.includes(attacker.accountId);
+    if (!official && (attacker.teamId == null || attacker.teamId !== victim.teamId)) return;
+    const timestamp = str(ev._D);
+    if (matchStartMs != null && Date.parse(timestamp) < matchStartMs) return;
+    const damage = num(ev.damage, -1);
+    if (type === "damage" && damage <= 0) return;
+    friendlyFire.push({
+      id: `${sourceEventId}:${type}:${attacker.accountId}`,
+      sourceEventId,
+      t: resolveT(ev, matchStartMs),
+      timestamp: timestamp || null,
+      type,
+      attacker,
+      victim,
+      evidence: official ? "officialTeamKiller" : "sameTeam",
+      damage: type === "damage" ? damage : null,
+      weaponId: str(damageInfo.damageCauserName) || null,
+      damageTypeCategory: str(damageInfo.damageTypeCategory) || null,
+      damageReason: str(damageInfo.damageReason) || null,
+      attackId: typeof ev.attackId === "number" && Number.isFinite(ev.attackId) ? ev.attackId : null,
+      dbnoId: typeof ev.dBNOId === "number" && Number.isFinite(ev.dBNOId) ? ev.dBNOId : null,
+      teamKillersAccountIds: officialIds,
+    });
+  };
+
+  for (const [sourceEventId, ev] of events.entries()) {
     const type = str(ev._T);
 
     if (type === "LogMatchStart") {
@@ -302,6 +350,41 @@ export function parseTelemetryJson(
         null;
       const damageReason =
         str(damageInfo?.damageReason) || str(ev.damageReason) || null;
+      const creditedKiller = asChar(ev.killer);
+      const finisher = asChar(ev.finisher);
+      const dbnoMaker = asChar(ev.dBNOMaker);
+      upsertPlayer(finisher);
+      upsertPlayer(dbnoMaker);
+      const officialIds = Array.isArray(ev.teamKillers_AccountId)
+        ? [...new Set(ev.teamKillers_AccountId.filter((id): id is string =>
+          typeof id === "string" && id !== "" && id !== "None" && !id.startsWith("ai."),
+        ))]
+        : [];
+      const victimSnapshot = playerSnapshot(victim);
+      const killerSnapshot = playerSnapshot(creditedKiller);
+      const killActors = new Map<string, TelemetryPlayer>();
+      if (killerSnapshot) killActors.set(killerSnapshot.accountId, killerSnapshot);
+      for (const accountId of officialIds) {
+        const character = [creditedKiller, finisher, dbnoMaker]
+          .find((c) => c?.accountId === accountId);
+        killActors.set(accountId, playerSnapshot(character ?? null) ??
+          playersMap.get(accountId) ?? {accountId, name: "Unknown", teamId: null});
+      }
+      for (const actor of killActors.values()) {
+        // 仅把归属击杀者的伤害信息关联给本人，避免将敌方终结武器归到队友名下。
+        const actorDamageInfo = actor.accountId === killerSnapshot?.accountId
+          ? (ev.killerDamageInfo as Record<string, unknown> | undefined) ?? (type === "LogPlayerKill" ? ev : {})
+          : actor.accountId === str(finisher?.accountId)
+            ? (ev.finishDamageInfo as Record<string, unknown> | undefined) ?? {}
+            : actor.accountId === str(dbnoMaker?.accountId)
+              ? (ev.dBNODamageInfo as Record<string, unknown> | undefined) ?? {}
+              : {};
+        pushFriendlyFire(ev, sourceEventId, "kill", actor, victimSnapshot, actorDamageInfo, officialIds);
+      }
+      if (type === "LogPlayerKillV2") {
+        pushFriendlyFire(ev, sourceEventId, "finish", playerSnapshot(finisher), victimSnapshot,
+          (ev.finishDamageInfo as Record<string, unknown> | undefined) ?? {}, officialIds);
+      }
       const loc = locOf(victim);
       gameEvents.push({
         t,
@@ -322,6 +405,7 @@ export function parseTelemetryJson(
       const attacker = asChar(ev.attacker);
       upsertPlayer(victim);
       upsertPlayer(attacker);
+      pushFriendlyFire(ev, sourceEventId, "knock", playerSnapshot(attacker), playerSnapshot(victim));
       const t = resolveT(ev, matchStartMs);
       maxT = Math.max(maxT, t);
       const loc = locOf(victim);
@@ -340,6 +424,12 @@ export function parseTelemetryJson(
     }
 
     if (type === "LogPlayerTakeDamage") {
+      const victim = asChar(ev.victim);
+      const attacker = asChar(ev.attacker);
+      upsertPlayer(victim);
+      upsertPlayer(attacker);
+      // 友伤统计保留所有伤害来源（含载具），不受回放枪线类别和采样限制。
+      pushFriendlyFire(ev, sourceEventId, "damage", playerSnapshot(attacker), playerSnapshot(victim));
       const category = str(ev.damageTypeCategory);
       // 枪伤 / 近战 / 投掷爆炸；排除蓝圈、坠落、自伤等
       if (
@@ -351,10 +441,6 @@ export function parseTelemetryJson(
       ) {
         continue;
       }
-      const victim = asChar(ev.victim);
-      const attacker = asChar(ev.attacker);
-      upsertPlayer(victim);
-      upsertPlayer(attacker);
       const t = resolveT(ev, matchStartMs);
       maxT = Math.max(maxT, t);
       pushGunline(t, attacker, victim, "damage");
@@ -475,6 +561,7 @@ export function parseTelemetryJson(
   sampledZones.sort((a, b) => a.t - b.t);
   const gunlines = sampleGunlines(rawGunlines);
   vehicles.sort((a, b) => a.t - b.t);
+  friendlyFire.sort((a, b) => a.t - b.t || a.sourceEventId - b.sourceEventId);
 
   // 官方 match.duration 偶发异常偏大；优先用事件推算的 maxT
   const fromEvents = Math.ceil(maxT);
@@ -505,6 +592,7 @@ export function parseTelemetryJson(
     zones: sampledZones,
     gunlines,
     vehicles,
+    friendlyFire,
   };
 }
 

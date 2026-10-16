@@ -39,6 +39,24 @@ export type TelemetryPlayer = {
   teamId: number | null;
 };
 
+export type TelemetryFriendlyFireEvent = {
+  id: string;
+  sourceEventId: number;
+  t: number;
+  timestamp: string | null;
+  type: "damage" | "knock" | "kill" | "finish";
+  attacker: TelemetryPlayer;
+  victim: TelemetryPlayer;
+  evidence: "sameTeam" | "officialTeamKiller";
+  damage: number | null;
+  weaponId: string | null;
+  damageTypeCategory: string | null;
+  damageReason: string | null;
+  attackId: number | null;
+  dbnoId: number | null;
+  teamKillersAccountIds: string[];
+};
+
 export type TelemetryPosition = {
   t: number;
   accountId: string;
@@ -94,6 +112,8 @@ export type ParsedTelemetry = {
   gunlines: TelemetryGunline[];
   /** parser ≥ 1.2.0：载具上车/下车/摧毁 */
   vehicles: TelemetryVehicleEvent[];
+  /** 不抽样；独立于回放枪线，保留事件发生时的队伍身份 */
+  friendlyFire: TelemetryFriendlyFireEvent[];
 };
 
 export type TelemetryAssetMeta = {
@@ -111,7 +131,7 @@ export type TelemetryAssetMeta = {
   durationSec?: number | null;
 };
 
-export const PARSER_VERSION = "1.2.0";
+export const PARSER_VERSION = "1.3.0";
 
 export const DEFAULT_SAMPLE_HZ = 1;
 

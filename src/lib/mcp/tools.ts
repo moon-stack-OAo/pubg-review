@@ -9,6 +9,7 @@ import {PUBG_PLATFORMS, type PubgPlatform} from "@/lib/pubg/types";
 import {detectFrequentMates} from "@/lib/squad/detect-mates";
 import {getSquadStats} from "@/lib/squad/stats";
 import {getTelemetryEvents, getTelemetryStatus, parseMatchTelemetry,} from "@/lib/telemetry/service";
+import {getMatchFriendlyFire} from "@/lib/telemetry/friendly-fire";
 import type {McpServer} from "@modelcontextprotocol/server";
 import {z} from "zod";
 
@@ -513,6 +514,32 @@ export function registerPubgMcpTools(server: McpServer) {
           ...data,
           mapLabel: data.mapName ? mapLabel(data.mapName) : null,
         });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_match_friendly_fire",
+    {
+      title: "对局友伤明细与统计",
+      description:
+        "根据官方遥测统计队内伤害、击倒、归属击杀与终结行为，返回玩家/攻击者→受害者聚合及时间、武器、伤害明细。不判断是否故意。伤害记录不抽样；缺少遥测时返回不可用状态，不能视作零友伤。默认自动解析或升级旧缓存；请按场串行调用，勿批量扫库。",
+      inputSchema: z.object({
+        platform: platformSchema.describe("平台：steam / kakao / xbox / psn"),
+        matchId: z.string().trim().min(1).describe("对局 ID"),
+        accountId: z.string().trim().min(1).optional().describe("可选，筛选该玩家造成或承受的友伤"),
+        direction: z.enum(["both", "dealt", "received"]).optional()
+          .describe("both=双方（默认），dealt=造成，received=承受；后两项须传 accountId"),
+        autoParse: z.boolean().optional().describe("默认 true；false 仅读本地缓存，旧格式返回 outdated"),
+        limit: z.number().int().min(1).max(500).optional().describe("明细条数，1–500，默认 100；不影响聚合统计"),
+        offset: z.number().int().min(0).optional().describe("明细分页偏移，默认 0"),
+      }),
+    },
+    async ({platform, matchId, ...query}) => {
+      try {
+        return textResult(await getMatchFriendlyFire(platform, matchId, query));
       } catch (error) {
         return errorResult(error);
       }

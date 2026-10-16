@@ -11,7 +11,8 @@
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "start:standalone": "node dist/pubg-review/server.js",
     "lint": "eslint",
-    "check:map-coords": "node scripts/check-map-coords.mjs"
+    "check:map-coords": "node scripts/check-map-coords.mjs",
+    "check:friendly-fire": "node scripts/check-friendly-fire.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
