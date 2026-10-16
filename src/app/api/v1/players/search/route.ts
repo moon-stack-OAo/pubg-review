@@ -23,6 +23,7 @@ export async function GET(request: Request) {
         platform: player.platform,
         shard: player.shard,
         banType: player.banType,
+        clanId: player.clanId,
         recentMatchCount: player.matchIds.length,
       },
       { cached },

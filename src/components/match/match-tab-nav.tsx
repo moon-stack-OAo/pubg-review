@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import {buildMatchHref} from "@/lib/navigation";
 
 const TABS = [
   { id: "report", label: "报告" },
@@ -27,6 +28,7 @@ export function MatchTabNav({
   platform,
   accountId,
   name,
+  returnTo,
   active,
   telemetryStatus,
 }: {
@@ -34,14 +36,10 @@ export function MatchTabNav({
   platform: string;
   accountId?: string;
   name?: string;
+  returnTo?: string;
   active: MatchTabId;
   telemetryStatus?: string;
 }) {
-  const base = new URLSearchParams();
-  base.set("platform", platform);
-  if (accountId) base.set("accountId", accountId);
-  if (name) base.set("name", name);
-
   const telemetryReady = telemetryStatus === "ready";
 
   const telemetryHint =
@@ -65,9 +63,7 @@ export function MatchTabNav({
           className="flex gap-1 overflow-x-auto overscroll-x-contain px-4 [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden"
         >
           {TABS.map((tab) => {
-            const q = new URLSearchParams(base);
-            if (tab.id !== "report") q.set("tab", tab.id);
-            const href = `/match/${matchId}?${q.toString()}`;
+            const href = buildMatchHref(matchId, {platform, accountId, name, returnTo, tab: tab.id});
             const isActive = active === tab.id;
             const weaponsLocked = tab.id === "weapons" && !telemetryReady;
             if (weaponsLocked) {

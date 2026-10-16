@@ -1,5 +1,7 @@
 ﻿import Link from "next/link";
+import {buildMatchHref, buildPlayerReturnHref, firstQueryValues, type PageQuery} from "@/lib/navigation";
 import {BanStatusCard} from "@/components/ban-status-card";
+import {ClanCard} from "@/components/clan-card";
 import {FormStatusCard} from "@/components/form-status-card";
 import {ReportTagChip} from "@/components/match-report-card";
 import {ModeFilter} from "@/components/mode-filter";
@@ -13,6 +15,7 @@ import {
   WeaponsTabPanel,
 } from "@/components/player-tabs";
 import {SquadTabPanel} from "@/components/squad-tab";
+import {SeasonAiReview} from "@/components/season-ai-review";
 import {SeasonSelect} from "@/components/season-select";
 import {TrendChart} from "@/components/trend-chart";
 import {AppTopbar, Card, ErrorBox, GameModeChips, Kpi, PageShell, buttonClass} from "@/components/ui";
@@ -39,6 +42,7 @@ import {
   getPlayerWindowStats,
   getWeaponsTabData,
 } from "@/lib/history/service";
+import {shouldShowAiUi} from "@/lib/ai/service";
 import {getCachedSeasons, getPlayerDashboard} from "@/lib/pubg/service";
 import {getSquadStats} from "@/lib/squad/stats";
 import type {SquadStatsResult} from "@/lib/squad/types";
@@ -60,23 +64,7 @@ function parseMatchPage(raw: string | undefined): number {
 
 type PageProps = {
   params: Promise<{ platform: string; name: string }>;
-  searchParams: Promise<{
-    gameMode?: string;
-    seasonId?: string;
-    tag?: string;
-    map?: string;
-    tab?: string;
-    vs?: string;
-    mates?: string;
-    limit?: string;
-    hours?: string;
-    date?: string;
-    tz?: string;
-    until?: string;
-    refresh?: string;
-    sort?: string;
-    page?: string;
-  }>;
+  searchParams: Promise<PageQuery>;
 };
 
 function parseMateNames(raw: string | undefined): string[] {
@@ -144,6 +132,7 @@ type PrimaryTagInfo = {
 
 export default async function PlayerPage({ params, searchParams }: PageProps) {
   const { platform, name: nameParam } = await params;
+  const query = firstQueryValues(await searchParams);
   const {
     gameMode = "",
     seasonId: seasonIdParam = "",
@@ -160,8 +149,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
     refresh: refreshParam = "",
     sort: sortParam = "",
     page: pageParam = "",
-  } = await searchParams;
+  } = query;
   const name = safeDecodeURIComponent(nameParam);
+  const returnTo = buildPlayerReturnHref(platform, name, query);
   const seasonId = seasonIdParam.trim() || undefined;
   const activeTag = tagParam.trim() || undefined;
   const activeMap = mapParam.trim() || undefined;
@@ -475,7 +465,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                 {platform}
               </span>
             </div>
-            <p className="font-mono text-sm text-muted">
+            <p className="break-all font-mono text-sm text-muted">
               {data ? data.player.accountId : ""}
             </p>
             {data?.renameHint.previousName &&
@@ -616,6 +606,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
               <SquadTabPanel
                 platform={platform}
                 name={name}
+                returnTo={returnTo}
                 accountId={data.player.accountId}
                 mates={mateNames}
                 limit={squadLimit}
@@ -629,25 +620,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
             </Card>
           ) : (
             <>
-              <FormStatusCard
-                analysis={formAnalysis}
-                error={formError || undefined}
-                platform={platform}
-                accountId={data.player.accountId}
-                name={name}
-                gameMode={gameMode || undefined}
-                seasonId={seasonId}
-              />
-
-              <WindowStatsCard
-                stats={windowStats}
-                error={windowError || undefined}
-                platform={platform}
-                accountId={data.player.accountId}
-                name={name}
-              />
-
               <Card>
+                <h2 className="mb-3 font-medium">赛季概览</h2>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-fg-secondary">
                   <div className="flex flex-wrap items-center gap-3">
                     {seasons.length > 0 ? (
@@ -664,13 +638,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                     ) : (
                       <span>赛季：{data.season.seasonId}</span>
                     )}
-                    <span className="text-muted">·</span>
-                    <span>
-                      缓存：玩家 {data.cached.player ? "命中" : "未命中"} / 赛季{" "}
-                      {data.cached.season ? "命中" : "未命中"}
-                    </span>
-                    <span className="text-muted">·</span>
-                    <span>本地历史库 {data.historyTotal} 场</span>
                   </div>
                 </div>
 
@@ -706,29 +673,26 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   </p>
                 )}
 
-                <div className="mt-5 border-t border-border pt-4">
-                  <h3 className="mb-2 text-sm font-medium text-fg-secondary">
-                    弱点标签
-                    <span className="ml-2 text-xs font-normal text-muted">
-                      近 {data.recentMatches.length} 场主因聚合 · 点击过滤对局
-                    </span>
-                  </h3>
-                  <WeaknessTagChips
-                    tags={data.weaknessTags}
-                    platform={platform}
-                    name={name}
-                    activeTag={activeTag}
-                    gameMode={gameMode || undefined}
-                    seasonId={seasonId}
-                    map={activeMap}
-                    sort={matchSort === "time" ? undefined : matchSort}
-                  />
-                </div>
-
-                <div className="mt-5 border-t border-border pt-4">
-                  <TrendChart trend={data.trend} />
-                </div>
+                <details className="mt-3 text-xs text-muted">
+                  <summary className="cursor-pointer">数据与缓存详情</summary>
+                  <p className="mt-2">
+                    缓存：玩家 {data.cached.player ? "命中" : "未命中"} / 赛季{" "}
+                    {data.cached.season ? "命中" : "未命中"}
+                    {" · "}本地历史库 {data.historyTotal} 场
+                  </p>
+                </details>
               </Card>
+
+              <FormStatusCard
+                analysis={formAnalysis}
+                error={formError || undefined}
+                platform={platform}
+                accountId={data.player.accountId}
+                name={name}
+                returnTo={returnTo}
+                gameMode={gameMode || undefined}
+                seasonId={seasonId}
+              />
 
               <Card>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -833,6 +797,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                       platform={platform}
                       accountId={data.player.accountId}
                       name={name}
+                      returnTo={returnTo}
                       showSource
                     />
                     {matchTotalPages > 1 ? (
@@ -874,8 +839,75 @@ export default async function PlayerPage({ params, searchParams }: PageProps) {
                   </>
                 )}
               </Card>
+
+              <div className="min-w-0 [&_table]:min-w-[800px] [&_table]:whitespace-nowrap [&_table]:tabular-nums [&_td>span]:w-max">
+                <WindowStatsCard
+                  stats={windowStats}
+                  error={windowError || undefined}
+                  platform={platform}
+                  accountId={data.player.accountId}
+                  name={name}
+                  returnTo={returnTo}
+                />
+              </div>
+
+              <Card>
+                <details>
+                  <summary className="cursor-pointer font-medium">
+                    弱点标签与 14 天趋势
+                  </summary>
+                  <div className="mt-4">
+                    <h3 className="mb-2 text-sm font-medium text-fg-secondary">
+                      弱点标签
+                      <span className="ml-2 text-xs font-normal text-muted">
+                        近 {data.recentMatches.length} 场主因聚合 · 点击过滤对局
+                      </span>
+                    </h3>
+                    <WeaknessTagChips
+                      tags={data.weaknessTags}
+                      platform={platform}
+                      name={name}
+                      activeTag={activeTag}
+                      gameMode={gameMode || undefined}
+                      seasonId={seasonId}
+                      map={activeMap}
+                      sort={matchSort === "time" ? undefined : matchSort}
+                    />
+                  </div>
+                  <div className="mt-5 border-t border-border pt-4">
+                    <TrendChart trend={data.trend} />
+                  </div>
+                </details>
+              </Card>
+
+              {shouldShowAiUi() ? (
+                <Card>
+                  <details>
+                    <summary className="cursor-pointer font-medium">AI 赛季评价</summary>
+                    <div className="mt-4">
+                      <SeasonAiReview
+                        platform={platform}
+                        name={name}
+                        seasonId={activeSeasonId || seasonId}
+                        gameMode={gameMode || undefined}
+                      />
+                    </div>
+                  </details>
+                </Card>
+              ) : null}
             </>
           )}
+
+          {data.player.clanId ? (
+            <details>
+              <summary className="cursor-pointer text-sm font-medium text-fg-secondary">
+                战队资料（官方）
+              </summary>
+              <div className="mt-3">
+                <ClanCard platform={platform} clanId={data.player.clanId} />
+              </div>
+            </details>
+          ) : null}
         </>
       )}
     </PageShell>
@@ -889,6 +921,7 @@ function MatchTable({
   platform,
   accountId,
   name,
+  returnTo,
   showSource = false,
 }: {
   rows: {
@@ -909,11 +942,12 @@ function MatchTable({
   platform: string;
   accountId: string;
   name: string;
+  returnTo?: string;
   showSource?: boolean;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-left text-sm">
+    <div className="min-w-0 max-w-full overflow-x-auto">
+      <table className="w-full min-w-[900px] whitespace-nowrap text-left text-sm tabular-nums">
         <thead className="text-muted">
           <tr>
             <th className="px-2 py-2 font-medium">时间</th>
@@ -939,7 +973,7 @@ function MatchTable({
               >
                 <td className="px-2 py-2">
                   <Link
-                    href={`/match/${m.matchId}?platform=${platform}&accountId=${encodeURIComponent(accountId)}&name=${encodeURIComponent(name)}`}
+                    href={buildMatchHref(m.matchId, {platform, accountId, name, returnTo})}
                     className="text-accent hover:underline"
                   >
                     {formatDateTime(m.playedAt)}
@@ -952,6 +986,7 @@ function MatchTable({
                     matchType={m.matchType}
                     isCustomMatch={m.isCustomMatch}
                     size="sm"
+                    className="w-max"
                   />
                 </td>
                 <td className={`px-2 py-2 font-medium ${rankClass(m.rank)}`}>

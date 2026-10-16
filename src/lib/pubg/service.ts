@@ -10,6 +10,7 @@ import {buildDailyTrend, type PlayerTrend,} from "@/lib/history/trend";
 import {readPersistedMatch, writePersistedMatch,} from "@/lib/persist/match-store";
 import {readPersistedSeason, writePersistedSeason,} from "@/lib/persist/season-store";
 import {
+    getClan,
     getCurrentSeasonId,
     getMatchDetail,
     getPlayerSeasonOverview,
@@ -18,7 +19,9 @@ import {
     searchPlayerByName,
 } from "@/lib/pubg/client";
 import {mapLabel} from "@/lib/pubg/maps";
+import {seasonMatchesPlatform} from "@/lib/pubg/seasons";
 import type {
+    PubgClan,
     PubgGameModeStats,
     PubgMatchDetail,
     PubgPlatform,
@@ -94,26 +97,70 @@ export async function getCachedPlayer(
   const result = await cacheGetOrSet(key, TTL.playerByName, () =>
     searchPlayerByName(platform, name),
   );
-  // 旧缓存对象可能缺 banType 字段：回源一次补齐
-  if (!("banType" in result.value) || result.value.banType == null) {
+  const missingBan =
+    !("banType" in result.value) || result.value.banType == null;
+  const missingClan = !("clanId" in result.value);
+  // 旧缓存对象可能缺 banType / clanId：回源一次补齐
+  if (missingBan || missingClan) {
     if (result.cached) {
       const fresh = await searchPlayerByName(platform, name);
       cacheSet(key, fresh, TTL.playerByName);
       return { value: fresh, cached: false };
     }
     return {
-      value: { ...result.value, banType: "Unknown" },
+      value: {
+        ...result.value,
+        banType: result.value.banType ?? "Unknown",
+        clanId: result.value.clanId ?? null,
+      },
       cached: result.cached,
     };
   }
   return result;
 }
 
+/**
+ * 战队详情。无 clanId 不打官方；404 视为战队已不存在，短缓存空结果避免反复打满 RPM。
+ */
+export async function getCachedClan(
+  platform: PubgPlatform,
+  clanId: string | null | undefined,
+): Promise<{ value: PubgClan | null; cached: boolean }> {
+  const id = clanId?.trim() ?? "";
+  if (!id) return { value: null, cached: true };
+
+  const key = `clan:${platform}:${id}`;
+  if (cacheGet<true>(`${key}:miss`)) {
+    return { value: null, cached: true };
+  }
+  const hit = cacheGet<PubgClan>(key);
+  if (hit) {
+    return { value: hit, cached: true };
+  }
+
+  try {
+    const value = await getClan(platform, id);
+    cacheSet(key, value, TTL.clan);
+    return { value, cached: false };
+  } catch (error) {
+    if (error instanceof PubgApiError && error.status === 404) {
+      cacheSet(`${key}:miss`, true, 30 * 60 * 1000);
+      return { value: null, cached: false };
+    }
+    throw error;
+  }
+}
+
 async function resolveSeasonId(
   platform: PubgPlatform,
   seasonId?: string,
 ): Promise<string> {
-  if (seasonId) return seasonId;
+  if (seasonId) {
+    if (!seasonMatchesPlatform(seasonId, platform)) {
+      throw new BizError("该赛季不适用于当前平台", 400, 40001);
+    }
+    return seasonId;
+  }
   const { value: seasons } = await getCachedSeasons(platform);
   const current = seasons.find((s) => s.isCurrent);
   if (current) return current.id;
@@ -365,6 +412,7 @@ export async function getPlayerDashboard(
       platform: playerResult.value.platform,
       shard: playerResult.value.shard,
       banType: playerResult.value.banType ?? "Unknown",
+      clanId: playerResult.value.clanId ?? null,
       recentMatchCount: playerResult.value.matchIds.length,
     },
     season: {
@@ -469,6 +517,10 @@ export async function refreshPlayer(
   const player = await searchPlayerByName(platform, name);
   if (player.accountId !== accountId) {
     throw new BizError("accountId 与昵称不匹配", 400, 40001);
+  }
+  if (player.clanId) {
+    cacheDelete(`clan:${platform}:${player.clanId}`);
+    cacheDelete(`clan:${platform}:${player.clanId}:miss`);
   }
 
   cacheSet(`player:${platform}:${player.name.trim()}`, player, TTL.playerByName);

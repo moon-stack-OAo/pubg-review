@@ -22,6 +22,17 @@ export type PubgPlayerSummary = {
   matchIds: string[];
   /** PUBG 账号封禁类型（非「是否开挂」判定） */
   banType: PubgBanType;
+  /** 官方 Players API attributes.clanId；无战队或旧缓存为 null */
+  clanId: string | null;
+};
+
+/** 官方 Clans API（v22.1.0）：GET /shards/{platform}/clans/{clanId} */
+export type PubgClan = {
+  clanId: string;
+  clanName: string;
+  clanTag: string;
+  clanLevel: number;
+  clanMemberCount: number;
 };
 
 export type PubgGameModeStats = {

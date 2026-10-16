@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {FormEvent, useCallback, useState, useSyncExternalStore} from "react";
+import {FormEvent, useCallback, useId, useState, useSyncExternalStore} from "react";
 import {useRouter} from "next/navigation";
 import {
   clearRecentSearches,
@@ -22,6 +22,7 @@ const PLATFORM_LABEL: Record<PubgPlatform, string> = {
 
 export function SearchForm() {
   const router = useRouter();
+  const platformGroupId = useId();
   const [platform, setPlatform] = useState<PubgPlatform>("steam");
   const [name, setName] = useState("");
   const [error, setError] = useState(false);
@@ -48,32 +49,37 @@ export function SearchForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <div className="mb-2 text-xs font-medium tracking-wide text-muted">
+      <fieldset className="min-w-0">
+        <legend className="mb-2 text-xs font-medium tracking-wide text-muted">
           平台
-        </div>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="平台选择">
+        </legend>
+        <div className="flex flex-wrap gap-2">
           {PUBG_PLATFORMS.map((item) => {
             const active = platform === item;
             return (
-              <button
+              <label
                 key={item}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setPlatform(item)}
                 className={cn(
-                  "h-8 rounded-full border px-3 text-xs font-medium transition-colors",
+                  "platform-option relative inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-xs font-medium transition-colors",
                   active
                     ? "border-accent-border bg-accent-muted text-fg"
                     : "border-border bg-bg text-fg-secondary hover:bg-surface-hover hover:text-fg",
                 )}
               >
+                <input
+                  type="radio"
+                  name={platformGroupId}
+                  value={item}
+                  checked={active}
+                  onChange={() => setPlatform(item)}
+                  className="sr-only"
+                />
                 {PLATFORM_LABEL[item]}
-              </button>
+              </label>
             );
           })}
         </div>
-      </div>
+      </fieldset>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-2" noValidate>
         <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">

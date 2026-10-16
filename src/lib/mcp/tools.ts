@@ -43,7 +43,7 @@ export function registerPubgMcpTools(server: McpServer) {
     {
       title: "搜索 PUBG 玩家",
       description:
-        "按平台与昵称搜索玩家，返回 accountId、banType、近期对局数量等基础信息。",
+        "按平台与昵称搜索玩家，返回 accountId、banType、clanId、近期对局数量等基础信息。",
       inputSchema: z.object({
         platform: platformSchema.describe("平台：steam / kakao / xbox / psn"),
         name: z.string().min(1).describe("游戏内昵称（大小写需与游戏内一致）"),
@@ -58,6 +58,7 @@ export function registerPubgMcpTools(server: McpServer) {
           platform: player.platform,
           shard: player.shard,
           banType: player.banType,
+          clanId: player.clanId,
           recentMatchCount: player.matchIds.length,
           cached,
         });

@@ -17,24 +17,37 @@ export function BanStatusCard({
   checkedAt?: string;
 }) {
   const view = getBanStatusView(banType);
+  const isNormal = view.tone === "ok";
 
   return (
     <Card className={TONE_CLASS[view.tone] ?? TONE_CLASS.unknown}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs opacity-80">账号封禁状态（官方）</p>
-          <p className="mt-1 text-xl font-semibold tracking-tight">{view.label}</p>
-          <p className="mt-2 text-sm opacity-90">{view.description}</p>
+          {isNormal ? (
+            <p className="text-sm">
+              账号封禁状态（官方）：<span className="font-semibold">{view.label}</span>
+            </p>
+          ) : (
+            <>
+              <p className="text-xs opacity-80">账号封禁状态（官方）</p>
+              <p className="mt-1 text-xl font-semibold tracking-tight">{view.label}</p>
+              <p className="mt-2 text-sm opacity-90">{view.description}</p>
+            </>
+          )}
         </div>
-        <div className="text-right text-xs opacity-70">
+      </div>
+      <details className="mt-2 text-xs">
+        <summary className="cursor-pointer font-medium">状态详情与说明</summary>
+        {isNormal ? <p className="mt-2 opacity-90">{view.description}</p> : null}
+        <div className="mt-2 opacity-70">
           <div>banType: {view.banType}</div>
           {checkedAt ? <div className="mt-1">查询：{checkedAt}</div> : null}
         </div>
-      </div>
-      <p className="mt-3 text-xs opacity-70">
-        说明：本站只展示 PUBG 官方 API 的封禁字段，不做「是否开挂」推断，也不替代 BattlEye / Steam
-        VAC 检测。
-      </p>
+        <p className="mt-2 opacity-70">
+          说明：本站只展示 PUBG 官方 API 的封禁字段，不做「是否开挂」推断，也不替代 BattlEye / Steam
+          VAC 检测。
+        </p>
+      </details>
     </Card>
   );
 }

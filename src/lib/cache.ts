@@ -100,6 +100,7 @@ export async function cacheGetOrSet<T>(
 
 export const TTL = {
   playerByName: 30 * 60 * 1000,
+  clan: 6 * 60 * 60 * 1000,
   season: 10 * 60 * 1000,
   seasonsList: 6 * 60 * 60 * 1000,
   match: 24 * 60 * 60 * 1000,

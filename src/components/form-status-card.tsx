@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import {buildMatchHref} from "@/lib/navigation";
 import {Card} from "@/components/ui";
 import {buildPlayerHref} from "@/components/player-tabs";
 import type {AnomalyItem, FormStatusCode, PlayerFormAnalysis,} from "@/lib/analysis/form-status";
@@ -25,20 +26,6 @@ const STATUS_TONE: Record<
   },
 };
 
-function matchHref(
-  matchId: string,
-  platform: string,
-  accountId: string,
-  name: string,
-): string {
-  const q = new URLSearchParams({
-    platform,
-    accountId,
-    name,
-  });
-  return `/match/${matchId}?${q}`;
-}
-
 function AnomalyRow({
   item,
   platform,
@@ -46,6 +33,7 @@ function AnomalyRow({
   name,
   gameMode,
   seasonId,
+  returnTo,
 }: {
   item: AnomalyItem;
   platform: string;
@@ -53,6 +41,7 @@ function AnomalyRow({
   name: string;
   gameMode?: string;
   seasonId?: string;
+  returnTo?: string;
 }) {
   if (item.type === "tag_streak") {
     const tagHref = buildPlayerHref(platform, name, {
@@ -72,7 +61,7 @@ function AnomalyRow({
           </Link>
           {firstMatchId ? (
             <Link
-              href={matchHref(firstMatchId, platform, accountId, name)}
+              href={buildMatchHref(firstMatchId, {platform, accountId, name, returnTo})}
               className="text-fg-secondary hover:text-accent hover:underline"
             >
               首场对局
@@ -101,7 +90,7 @@ function AnomalyRow({
         ) : null}
       </span>
       <Link
-        href={matchHref(item.matchId, platform, accountId, name)}
+        href={buildMatchHref(item.matchId, {platform, accountId, name, returnTo})}
         className="text-xs text-accent hover:underline"
       >
         查看对局
@@ -118,6 +107,7 @@ export function FormStatusCard({
   name,
   gameMode,
   seasonId,
+  returnTo,
 }: {
   analysis: PlayerFormAnalysis | null;
   error?: string;
@@ -126,6 +116,7 @@ export function FormStatusCard({
   name: string;
   gameMode?: string;
   seasonId?: string;
+  returnTo?: string;
 }) {
   if (error || !analysis) {
     return (
@@ -142,6 +133,22 @@ export function FormStatusCard({
 
   const { form, anomalies, overallScore } = analysis;
   const tone = STATUS_TONE[form.status];
+  const anomalyRows = anomalies.map((item, index) => (
+    <AnomalyRow
+      key={
+        item.type === "tag_streak"
+          ? `streak-${item.tagCode}-${index}`
+          : `${item.type}-${item.matchId}-${index}`
+      }
+      item={item}
+      platform={platform}
+      accountId={accountId}
+      name={name}
+      gameMode={gameMode}
+      seasonId={seasonId}
+      returnTo={returnTo}
+    />
+  ));
 
   return (
     <Card className={tone.card}>
@@ -198,23 +205,17 @@ export function FormStatusCard({
             近样本未检出相对自身的明显异常
           </p>
         ) : (
-          <ul className="space-y-2">
-            {anomalies.map((item, i) => (
-              <AnomalyRow
-                key={
-                  item.type === "tag_streak"
-                    ? `streak-${item.tagCode}-${i}`
-                    : `${item.type}-${item.matchId}-${i}`
-                }
-                item={item}
-                platform={platform}
-                accountId={accountId}
-                name={name}
-                gameMode={gameMode}
-                seasonId={seasonId}
-              />
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-2">{anomalyRows.slice(0, 3)}</ul>
+            {anomalyRows.length > 3 ? (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-medium text-fg-secondary">
+                  展开其余 {anomalyRows.length - 3} 条异常
+                </summary>
+                <ul className="mt-2 space-y-2">{anomalyRows.slice(3)}</ul>
+              </details>
+            ) : null}
+          </>
         )}
       </div>
     </Card>

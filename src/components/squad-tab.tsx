@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import {buildMatchHref} from "@/lib/navigation";
 import {useRouter} from "next/navigation";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {ExportSquadCsv} from "@/components/export-squad-csv";
@@ -695,11 +696,13 @@ function FullSquadMatches({
   platform,
   accountId,
   name,
+  returnTo,
 }: {
   matches: SquadMatchRow[];
   platform: string;
   accountId: string;
   name: string;
+  returnTo?: string;
 }) {
   if (matches.length === 0) {
     return null;
@@ -730,7 +733,7 @@ function FullSquadMatches({
               >
                 <td className="px-2 py-2">
                   <Link
-                    href={`/match/${m.matchId}?platform=${platform}&accountId=${encodeURIComponent(accountId)}&name=${encodeURIComponent(name)}`}
+                    href={buildMatchHref(m.matchId, {platform, accountId, name, returnTo})}
                     className="text-accent hover:underline"
                   >
                     {formatDateTime(m.playedAt)}
@@ -767,6 +770,7 @@ function FullSquadMatches({
 export function SquadTabPanel({
   platform,
   name,
+  returnTo,
   accountId,
   mates,
   limit,
@@ -779,6 +783,7 @@ export function SquadTabPanel({
 }: {
   platform: string;
   name: string;
+  returnTo?: string;
   accountId: string;
   mates: string[];
   limit: number;
@@ -899,6 +904,7 @@ export function SquadTabPanel({
                   platform={platform}
                   accountId={accountId}
                   name={name}
+                  returnTo={returnTo}
                 />
               </div>
             </>

@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import {buildMatchHref} from "@/lib/navigation";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {formatDuration} from "@/lib/format";
 import type {TelemetryEvent, TelemetryEventsPayload, TelemetryStatus,} from "@/lib/telemetry/types";
@@ -18,6 +19,7 @@ type Props = {
   platform: string;
   accountId?: string;
   playerName?: string;
+  returnTo?: string;
 };
 
 function nameOf(
@@ -64,7 +66,7 @@ function statusMessage(status: TelemetryStatus, err: string | null): string {
   return "";
 }
 
-export function MatchTimeline({ matchId, platform, accountId, playerName }: Props) {
+export function MatchTimeline({ matchId, platform, accountId, playerName, returnTo }: Props) {
   const [data, setData] = useState<TelemetryEventsPayload | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -197,14 +199,10 @@ export function MatchTimeline({ matchId, platform, accountId, playerName }: Prop
       ) : (
         <ul className="max-h-[28rem] space-y-1 overflow-y-auto text-sm">
           {filtered.map((e, i) => {
-            const q = new URLSearchParams({ platform, tab: "replay" });
-            if (accountId) q.set("accountId", accountId);
-            if (playerName) q.set("name", playerName);
-            q.set("t", String(Math.floor(e.t)));
             return (
               <li key={`${e.t}-${e.type}-${i}`}>
                 <Link
-                  href={`/match/${matchId}?${q.toString()}`}
+                  href={buildMatchHref(matchId, {platform, accountId, name: playerName, returnTo, tab: "replay", t: Math.floor(e.t)})}
                   title="跳转到回放"
                   className="flex cursor-pointer gap-3 rounded-lg border border-border/80 bg-surface-2/30 px-3 py-2 hover:border-accent-border hover:bg-surface-2"
                 >

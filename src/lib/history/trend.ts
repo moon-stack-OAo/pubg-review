@@ -21,26 +21,29 @@ export type TrendMatchInput = {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 
-function toDateKey(iso: string): string | null {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return null;
-  return new Date(t).toISOString().slice(0, 10);
+function toDateKey(timestamp: number): string {
+  return new Date(timestamp + SHANGHAI_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 /**
  * 近 `days` 天按日聚合：kd≈（击杀/非吃鸡场次）、场均伤害、平均排名。
- * 同一 matchId 去重；无数据返回空 points。
+ * 同一 matchId 去重；包含今天的上海日历日，无数据日期保留 null。
  */
 export function buildDailyTrend(
   matches: TrendMatchInput[],
   days = 14,
+  options: { now?: number } = {},
 ): PlayerTrend {
-  const cutoff = Date.now() - days * DAY_MS;
+  const now = options.now ?? Date.now();
+  const dayCount = Number.isFinite(days) ? Math.max(1, Math.floor(days)) : 14;
+  const today = Math.floor((now + SHANGHAI_OFFSET_MS) / DAY_MS) * DAY_MS - SHANGHAI_OFFSET_MS;
+  const cutoff = today - (dayCount - 1) * DAY_MS;
   const byId = new Map<string, TrendMatchInput>();
   for (const m of matches) {
     const t = Date.parse(m.playedAt);
-    if (!Number.isFinite(t) || t < cutoff) continue;
+    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
     if (!byId.has(m.matchId)) byId.set(m.matchId, m);
   }
 
@@ -55,8 +58,7 @@ export function buildDailyTrend(
   const byDay = new Map<string, Acc>();
 
   for (const m of byId.values()) {
-    const date = toDateKey(m.playedAt);
-    if (!date) continue;
+    const date = toDateKey(Date.parse(m.playedAt));
     let row = byDay.get(date);
     if (!row) {
       row = {
@@ -79,9 +81,12 @@ export function buildDailyTrend(
     }
   }
 
-  const points: TrendPoint[] = Array.from(byDay.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, r]) => {
+  const points: TrendPoint[] = Array.from(
+    { length: dayCount },
+    (_, index) => {
+      const date = toDateKey(cutoff + index * DAY_MS);
+      const r = byDay.get(date);
+      if (!r) return { date, kd: null, avgDamage: null, avgRank: null };
       let kd: number | null = null;
       if (r.deathsApprox > 0) kd = Number((r.kills / r.deathsApprox).toFixed(2));
       else if (r.kills > 0) kd = Number(r.kills.toFixed(2));
@@ -97,7 +102,8 @@ export function buildDailyTrend(
             ? Number((r.rankSum / r.rankCount).toFixed(1))
             : null,
       };
-    });
+    },
+  );
 
   return { granularity: "day", points };
 }

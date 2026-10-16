@@ -16,6 +16,7 @@ import type {
     TelemetryEvent,
     TelemetryEventsPayload,
     TelemetryGunline,
+    TelemetryPlayer,
     TelemetryPosition,
     TelemetryStatus,
     TelemetryVehicleEvent,
@@ -27,6 +28,21 @@ type Props = {
   platform: string;
   accountId?: string;
   initialT?: number;
+};
+
+type RosterPlayer = {
+  accountId: string;
+  name: string;
+  teamId: number | null;
+  alive: boolean;
+  knocked: boolean;
+};
+
+type RosterTeam = {
+  teamId: number | null;
+  label: string;
+  players: RosterPlayer[];
+  alive: number;
 };
 
 type Layers = {
@@ -48,7 +64,7 @@ const FOLLOW_ZOOM = 2;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 5;
 
-const SPEEDS = [1, 2, 4] as const;
+const SPEEDS = [1, 2, 4, 8] as const;
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
@@ -103,6 +119,72 @@ function teamColor(teamId: number | null, focus: boolean): string {
   if (teamId == null) return "#a1a1aa";
   const hue = (teamId * 47) % 360;
   return `hsl(${hue} 70% 60%)`;
+}
+
+/** 按当前时刻累积击杀/倒地/救援，得到存活状态 */
+function rosterAt(
+  players: TelemetryPlayer[],
+  events: TelemetryEvent[],
+  t: number,
+): RosterPlayer[] {
+  const dead = new Set<string>();
+  const knocked = new Set<string>();
+  for (const e of events) {
+    if (e.t > t) break;
+    if (e.type === "kill" && e.victimId) {
+      dead.add(e.victimId);
+      knocked.delete(e.victimId);
+    } else if (e.type === "knock" && e.victimId && !dead.has(e.victimId)) {
+      knocked.add(e.victimId);
+    } else if (e.type === "revive" && e.victimId) {
+      knocked.delete(e.victimId);
+    }
+  }
+  return players.map((p) => ({
+    accountId: p.accountId,
+    name: p.name,
+    teamId: p.teamId,
+    alive: !dead.has(p.accountId),
+    knocked: knocked.has(p.accountId),
+  }));
+}
+
+function groupRoster(players: RosterPlayer[], focusId?: string): RosterTeam[] {
+  const teams = new Map<string, RosterTeam>();
+  for (const p of players) {
+    const key = p.teamId == null ? "solo" : String(p.teamId);
+    let team = teams.get(key);
+    if (!team) {
+      team = {
+        teamId: p.teamId,
+        label: p.teamId == null ? "未分队" : `队伍 ${p.teamId}`,
+        players: [],
+        alive: 0,
+      };
+      teams.set(key, team);
+    }
+    team.players.push(p);
+    if (p.alive) team.alive += 1;
+  }
+  const list = Array.from(teams.values());
+  for (const team of list) {
+    team.players.sort((a, b) => {
+      if (a.accountId === focusId) return -1;
+      if (b.accountId === focusId) return 1;
+      if (a.alive !== b.alive) return a.alive ? -1 : 1;
+      return a.name.localeCompare(b.name, "zh");
+    });
+  }
+  const focusTeam =
+    players.find((p) => p.accountId === focusId)?.teamId ?? null;
+  list.sort((a, b) => {
+    const aFocus = focusId != null && a.teamId === focusTeam ? 1 : 0;
+    const bFocus = focusId != null && b.teamId === focusTeam ? 1 : 0;
+    if (aFocus !== bFocus) return bFocus - aFocus;
+    if (a.alive !== b.alive) return b.alive - a.alive;
+    return (a.teamId ?? 999) - (b.teamId ?? 999);
+  });
+  return list;
 }
 
 function drawGunlines(
@@ -444,6 +526,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     vehicles: true,
   });
   const [follow, setFollow] = useState(() => Boolean(accountId));
+  const [focusId, setFocusId] = useState<string | undefined>(accountId);
   const [camZoom, setCamZoom] = useState(1);
   const [camCX, setCamCX] = useState<number | null>(null);
   const [camCY, setCamCY] = useState<number | null>(null);
@@ -611,6 +694,16 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
 
   const duration = data?.durationSec ?? 0;
   const mapSize = mapSizeCm(data?.mapName ?? "");
+  const rosterEvents = useMemo(() => {
+    const events = data?.events ?? [];
+    return events.filter(
+      (e) => e.type === "kill" || e.type === "knock" || e.type === "revive",
+    );
+  }, [data]);
+  const roster = useMemo(() => {
+    if (!data || data.status !== "ready") return [];
+    return groupRoster(rosterAt(data.players, rosterEvents, t), focusId);
+  }, [data, rosterEvents, t, focusId]);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -646,8 +739,8 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     let zoom = camZoom;
     let centerX = camCX ?? mapSize / 2;
     let centerY = camCY ?? mapSize / 2;
-    if (follow && accountId) {
-      const focusPos = at.get(accountId);
+    if (follow && focusId) {
+      const focusPos = at.get(focusId);
       if (focusPos) {
         zoom = Math.max(camZoom, FOLLOW_ZOOM);
         centerX = focusPos.x;
@@ -705,8 +798,8 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
       }
     }
 
-    if (layers.trail && accountId) {
-      const trail = byPlayer.get(accountId) ?? [];
+    if (layers.trail && focusId) {
+      const trail = byPlayer.get(focusId) ?? [];
       ctx.beginPath();
       let started = false;
       for (const p of trail) {
@@ -734,12 +827,12 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         byPlayer,
         curT,
         toCanvas,
-        accountId,
+        focusId,
       );
     }
 
     if (layers.gunlines && payload.gunlines?.length) {
-      drawGunlines(ctx, payload.gunlines, curT, toCanvas, accountId);
+      drawGunlines(ctx, payload.gunlines, curT, toCanvas, focusId);
     }
 
     if (layers.carePackages && payload.events?.length) {
@@ -747,14 +840,15 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     }
 
     if (layers.deaths && payload.events?.length) {
-      drawDeathMarks(ctx, payload.events, curT, toCanvas, accountId);
+      drawDeathMarks(ctx, payload.events, curT, toCanvas, focusId);
     }
 
     const nameById = new Map(payload.players.map((p) => [p.accountId, p]));
+    const focusTeam = focusId ? nameById.get(focusId)?.teamId : null;
 
     for (const [id, pos] of at) {
       const player = nameById.get(id);
-      const focus = Boolean(accountId && id === accountId);
+      const focus = Boolean(focusId && id === focusId);
       const { cx, cy } = toCanvas(pos.x, pos.y);
       const r = focus ? 5 : 3;
       ctx.beginPath();
@@ -766,21 +860,18 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         ctx.lineWidth = 1;
         ctx.stroke();
       }
-      if (layers.names && (focus || (player?.teamId != null && accountId))) {
-        const focusTeam = accountId
-          ? nameById.get(accountId)?.teamId
-          : null;
+      if (layers.names) {
         const sameTeam =
           focus ||
           (focusTeam != null && player?.teamId === focusTeam);
-        if (sameTeam || focus) {
+        if (sameTeam) {
           ctx.fillStyle = focus ? "#fde68a" : "#a1a1aa";
           ctx.font = "10px ui-sans-serif, system-ui";
           ctx.fillText(player?.name ?? id.slice(0, 6), cx + 6, cy - 4);
         }
       }
     }
-  }, [data, mapSize, layers, accountId, byPlayer, vehicleSegs, follow, camZoom, camCX, camCY, mapImage]);
+  }, [data, mapSize, layers, focusId, byPlayer, vehicleSegs, follow, camZoom, camCX, camCY, mapImage]);
 
   useEffect(() => {
     draw();
@@ -982,10 +1073,18 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
     );
   }
 
+  function focusPlayer(id: string) {
+    setFocusId(id);
+    setFollow(true);
+    const z = Math.max(camZoomRef.current, FOLLOW_ZOOM);
+    camZoomRef.current = z;
+    setCamZoom(z);
+  }
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-medium">2D 回放（MVP）</h2>
+        <h2 className="font-medium">2D 回放</h2>
         <span className="text-xs text-muted">
           {mapLabel(data.mapName)}
           {mapInfo
@@ -994,12 +1093,14 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         </span>
       </div>
 
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_15.5rem]">
+      <div className="min-w-0">
       <canvas
         ref={canvasRef}
         width={640}
         height={640}
         aria-label="对局 2D 回放画布，可拖拽平移，双指捏合缩放"
-        className="mx-auto max-h-[min(70vh,100vw)] w-full max-w-xl touch-none rounded-lg border border-border bg-black"
+        className="mx-auto max-h-[min(70vh,100vw)] w-full touch-none rounded-lg border border-border bg-black"
         onPointerDown={onCanvasPointerDown}
         onPointerMove={onCanvasPointerMove}
         onPointerUp={endPointer}
@@ -1033,6 +1134,64 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
           "未知地图，使用纯色画布降级"
         )}
       </p>
+      </div>
+
+      <aside className="max-h-[min(70vh,36rem)] overflow-y-auto rounded-lg border border-border bg-bg-elevated p-2">
+        <p className="px-1 pb-2 text-xs font-medium text-fg-secondary">
+          队伍 · 点选跟随
+        </p>
+        <ul className="space-y-2">
+          {roster.map((team) => {
+            const mine =
+              Boolean(accountId) &&
+              team.players.some((p) => p.accountId === accountId);
+            return (
+              <li key={team.label} className="rounded-md border border-border">
+                <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
+                  <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{background: teamColor(team.teamId, false)}}
+                    />
+                    <span className="truncate">{team.label}</span>
+                    {mine ? <span className="text-accent">我方</span> : null}
+                  </span>
+                  <span className="shrink-0 font-mono text-muted">
+                    存活 {team.alive}/{team.players.length}
+                  </span>
+                </div>
+                <ul>
+                  {team.players.map((p) => {
+                    const active = p.accountId === focusId;
+                    return (
+                      <li key={p.accountId}>
+                        <button
+                          type="button"
+                          onClick={() => focusPlayer(p.accountId)}
+                          className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs ${
+                            active
+                              ? "bg-accent-muted text-fg"
+                              : "text-fg-secondary hover:bg-surface-hover"
+                          }`}
+                        >
+                          <span className="truncate">
+                            {p.name}
+                            {p.accountId === accountId ? " · 我" : ""}
+                          </span>
+                          <span className={p.alive ? "text-muted" : "text-danger"}>
+                            {p.alive ? (p.knocked ? "倒地" : "存活") : "淘汰"}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
+      </aside>
+      </div>
 
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -1089,7 +1248,7 @@ export function MatchReplay({ matchId, platform, accountId, initialT }: Props) {
         />
 
         <div className="flex flex-wrap gap-3 text-xs text-fg-secondary">
-          {accountId ? (
+          {focusId ? (
             <label className="flex min-h-[var(--touch-min)] items-center gap-1.5 sm:min-h-0">
               <input
                 type="checkbox"

@@ -1,6 +1,8 @@
 import {appendApiSyncLog} from "@/lib/sync-log";
+import {getSeasonLabel, normalizeSeasons} from "./seasons";
 import type {
     PubgBanType,
+    PubgClan,
     PubgGameModeStats,
     PubgMatchDetail,
     PubgMatchSummary,
@@ -258,6 +260,13 @@ export function normalizeBanType(value: unknown): PubgBanType {
   return "Unknown";
 }
 
+/** 无战队时官方可能省略字段或给空串 */
+function normalizeClanId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export async function searchPlayerByName(
   platform: PubgPlatform,
   name: string,
@@ -281,6 +290,37 @@ export async function searchPlayerByName(
     shard,
     matchIds: extractMatchIds(player),
     banType: normalizeBanType(player.attributes?.banType),
+    clanId: normalizeClanId(player.attributes?.clanId),
+  };
+}
+
+/**
+ * 战队详情。官方：GET /shards/{platform}/clans/{clanId}
+ * 计入 API 限额，调用方应缓存；404 表示战队不存在或已解散。
+ */
+export async function getClan(
+  platform: PubgPlatform,
+  clanId: string,
+): Promise<PubgClan> {
+  const id = clanId.trim();
+  if (!id) {
+    throw new PubgApiError("clanId 不能为空", 400);
+  }
+  const shard = platformToShard(platform);
+  const data = await pubgFetch<JsonApiResponse>(
+    `/shards/${shard}/clans/${encodeURIComponent(id)}`,
+  );
+  const resource = Array.isArray(data.data) ? data.data[0] : data.data;
+  if (!resource) {
+    throw new PubgApiError("战队不存在", 404);
+  }
+  const attrs = resource.attributes ?? {};
+  return {
+    clanId: resource.id || id,
+    clanName: asString(attrs.clanName),
+    clanTag: asString(attrs.clanTag),
+    clanLevel: asNumber(attrs.clanLevel),
+    clanMemberCount: asNumber(attrs.clanMemberCount),
   };
 }
 
@@ -316,8 +356,7 @@ function toModeStats(gameMode: string, raw: Record<string, unknown>): PubgGameMo
 }
 
 function seasonLabel(id: string): string {
-  const parts = id.split(".");
-  return parts[parts.length - 1] || id;
+  return getSeasonLabel(id);
 }
 
 export async function listSeasons(platform: PubgPlatform): Promise<PubgSeasonMeta[]> {
@@ -329,8 +368,7 @@ export async function listSeasons(platform: PubgPlatform): Promise<PubgSeasonMet
     isCurrent: s.attributes?.isCurrentSeason === true,
     label: seasonLabel(s.id),
   }));
-  // 当前赛季置顶，其余保持官方顺序
-  return mapped.sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+  return normalizeSeasons(mapped, platform);
 }
 
 export async function getCurrentSeasonId(platform: PubgPlatform): Promise<string> {

@@ -16,15 +16,6 @@ function SearchIcon({className}: IconProps) {
   );
 }
 
-function MapIcon({className}: IconProps) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
-      <path d="M9 3v15M15 6v15" />
-    </svg>
-  );
-}
-
 function CrosshairIcon({className}: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -61,13 +52,11 @@ function CloseIcon({className}: IconProps) {
 
 const NAV_ITEMS = [
   {href: "/", label: "玩家查询", icon: SearchIcon},
-  {href: "/maps", label: "地图中心", icon: MapIcon},
   {href: "/weapons", label: "武器库", icon: CrosshairIcon},
   {href: "/favorites", label: "收藏玩家", icon: StarIcon},
 ] as const;
 
 function isNavItemActive(href: string, pathname: string) {
-  if (href === "/maps") return pathname === "/maps" || pathname.startsWith("/maps/");
   if (href === "/weapons") {
     return pathname === "/weapons" || pathname.startsWith("/weapons/");
   }

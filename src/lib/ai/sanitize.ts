@@ -1,5 +1,9 @@
 import type {MatchReport} from "@/lib/analysis/report-engine";
-import type {PlayerAnalysis} from "@/lib/analysis/player-analysis-core";
+import type {
+  PlayerAnalysis,
+  WeaknessTagSummary,
+} from "@/lib/analysis/player-analysis-core";
+import type {PubgGameModeStats} from "@/lib/pubg/types";
 
 /** 单场复盘脱敏 JSON：无 Key、无 CDN、无 raw telemetry */
 export type SanitizedMatchReportPayload = {
@@ -26,6 +30,26 @@ export type SanitizedMatchReportPayload = {
     survivalRatio: number;
     phase: string;
   };
+};
+
+/** 赛季评价脱敏：无 banType、无 Key、无 telemetry */
+export type SanitizedSeasonReviewPayload = {
+  kind: "season_review";
+  platform: string;
+  seasonId: string;
+  gameMode: string | null;
+  roundsPlayed: number;
+  wins: number;
+  top10s: number;
+  kd: number | null;
+  winRate: number | null;
+  top10Rate: number | null;
+  avgDamage: number | null;
+  avgSurvivalTimeSec: number | null;
+  rankPoints: number | null;
+  rankPointsTitle: string | null;
+  recentSample: number;
+  weaknessTags: Array<{ label: string; count: number }>;
 };
 
 export type SanitizedPlayerAnalysisPayload = {
@@ -74,6 +98,38 @@ export function sanitizeMatchReport(
       survivalRatio: report.metrics.survivalRatio,
       phase: report.metrics.phase,
     },
+  };
+}
+
+export function sanitizeSeasonReview(input: {
+  platform: string;
+  seasonId: string;
+  gameMode: string | null;
+  stats: PubgGameModeStats | null;
+  recentSample: number;
+  weaknessTags: WeaknessTagSummary[];
+}): SanitizedSeasonReviewPayload {
+  const stats = input.stats;
+  return {
+    kind: "season_review",
+    platform: input.platform,
+    seasonId: input.seasonId,
+    gameMode: input.gameMode,
+    roundsPlayed: stats?.roundsPlayed ?? 0,
+    wins: stats?.wins ?? 0,
+    top10s: stats?.top10s ?? 0,
+    kd: stats?.kd ?? null,
+    winRate: stats?.winRate ?? null,
+    top10Rate: stats?.top10Rate ?? null,
+    avgDamage: stats?.avgDamage ?? null,
+    avgSurvivalTimeSec: stats?.avgSurvivalTimeSec ?? null,
+    rankPoints: stats?.rankPoints ?? null,
+    rankPointsTitle: stats?.rankPointsTitle ?? null,
+    recentSample: input.recentSample,
+    weaknessTags: input.weaknessTags.slice(0, 5).map((tag) => ({
+      label: tag.label,
+      count: tag.count,
+    })),
   };
 }
 

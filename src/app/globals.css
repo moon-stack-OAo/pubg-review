@@ -92,20 +92,38 @@ input::-webkit-search-results-decoration {
   display: none;
 }
 
-:focus-visible {
-  outline: none;
-}
-
-a:focus-visible,
-button:focus-visible,
-[role="button"]:focus-visible,
-summary:focus-visible {
-  box-shadow: var(--shadow-focus);
+:focus-visible,
+.platform-option:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* 输入框由外层 .input-wrap:focus-within 承担焦点环，避免双层光圈 */
 .input-wrap input:focus-visible,
 .input-wrap textarea:focus-visible,
-.input-wrap select:focus-visible {
+.input-wrap select:focus-visible,
+.platform-option input:focus-visible {
+  outline: none;
   box-shadow: none;
+}
+
+@media (forced-colors: active) {
+  :focus-visible,
+  .platform-option:has(input:focus-visible),
+  .input-wrap:focus-within {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .platform-option:has(input:checked) {
+    border-color: Highlight;
+    color: Highlight;
+  }
+
+  .input-wrap input:focus-visible,
+  .input-wrap textarea:focus-visible,
+  .input-wrap select:focus-visible,
+  .platform-option input:focus-visible {
+    outline: none;
+  }
 }

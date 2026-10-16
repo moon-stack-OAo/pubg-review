@@ -23,11 +23,11 @@ cp .env.example .env.local
 | `TRUST_PROXY`             | 否          | 是否信任 `X-Forwarded-For`，默认 `false`                                         |
 | `MCP_ENABLED`             | 否          | Remote MCP 开关，默认关闭                                                        |
 | `MCP_TOKEN`               | 开启 MCP 时必填 | Bearer Token                                                              |
-| `AI_ANALYSIS_ENABLED`     | 否          | 可选 LLM 解读开关，默认关闭；无 Key 时行为与现网一致                                         |
-| `AI_API_KEY`              | 开启 AI 时建议填 | 模型网关 Key（仅服务端）；OpenAI-compatible                                         |
+| `AI_ANALYSIS_ENABLED`     | 否          | 可选 LLM 解读开关，默认关闭；无 Key 时行为与现网一致                                           |
+| `AI_API_KEY`              | 开启 AI 时建议填 | 模型网关 Key（仅服务端）；OpenAI-compatible                                          |
 | `AI_BASE_URL`             | 否          | 网关根路径，默认 `https://api.openai.com/v1`                                      |
 | `AI_MODEL`                | 否          | 模型名，默认 `gpt-4o-mini`                                                      |
-| `AI_RATE_LIMIT_RPM`       | 否          | 进程内 AI 外呼 RPM，默认 `6`（与官方 PUBG 限额无关）                                      |
+| `AI_RATE_LIMIT_RPM`       | 否          | 进程内 AI 外呼 RPM，默认 `6`（与官方 PUBG 限额无关）                                       |
 
 > 真实 Key / Token 不要提交 Git，也不要写进前端代码。
 
@@ -47,16 +47,16 @@ npm run lint
 
 ## 功能概览
 
-| 能力         | 说明                                           |
-|------------|----------------------------------------------|
-| 搜索 / 玩家概览  | 多平台昵称搜索；赛季 KPI、近况卡、弱点标签、14 天趋势、封禁状态          |
+| 能力         | 说明                                                           |
+|------------|--------------------------------------------------------------|
+| 搜索 / 玩家概览  | 多平台昵称搜索；赛季 KPI、近况卡、弱点标签、14 天趋势、封禁状态、战队资料与可选 AI 赛季评价 |
 | 对局复盘       | 报告（无遥测可降级 / 有遥测可增强）、可选 AI 人话解读（默认关）、积分板 CSV、事件轴、2D 回放（`?t=`） |
-| 武器 / 地图    | 本地历史聚合；完整武器明细依赖已 parse 的 telemetry           |
-| 对比 / 车队    | 两人 KPI + 近况并排；四人齐全同场统计与常一起队友建议               |
-| 本地历史库      | dashboard /「同步近况」落盘；官方约 14 天列表外可保留摘要         |
-| 收藏         | 浏览器 `localStorage`；支持单人 / 全部串行同步             |
-| 分享         | `/share/match/...` 只读卡 + 动态 OG               |
-| Remote MCP | 13 个 Tools，复用服务层；默认关闭，Bearer 鉴权              |
+| 武器 / 地图    | 本地历史聚合；完整武器明细依赖已 parse 的 telemetry                           |
+| 对比 / 车队    | 两人 KPI + 近况并排；四人齐全同场统计与常一起队友建议                               |
+| 本地历史库      | dashboard /「同步近况」落盘；官方约 14 天列表外可保留摘要                         |
+| 收藏         | 浏览器 `localStorage`；支持单人 / 全部串行同步                             |
+| 分享         | `/share/match/...` 只读卡 + 动态 OG                               |
+| Remote MCP | 13 个 Tools，复用服务层；默认关闭，Bearer 鉴权                              |
 
 **封禁说明**：页面上的 `banType`（`Innocent` / `TemporaryBan` / `PermanentBan`）只表示官方账号封禁状态，**不是开挂判定**，也不替代 BattlEye / Steam VAC。
 
@@ -69,8 +69,8 @@ npm run lint
 | `/match/{matchId}`          | `tab=report\|scoreboard\|timeline\|replay\|weapons`；回放可用 `t=` 秒定位                                                             |
 | `/share/match/{matchId}`    | 只读分享；无 `accountId` 时仅基础对局信息                                                                                                   |
 | `/favorites`                | 本机收藏；可串行同步近况入库                                                                                                                |
-| `/maps`                     | 独立地图中心；官方 Low Res 底图、遥测尺寸与 API 标识                                                                                           |
-| `/maps/{mapId}`             | 单地图资料页；当前不含玩家战绩和对局复盘                                                                                                         |
+| `/maps`                     | 地图中心暂停开放，显示暂停说明；官方底图仍用于对局回放 |
+| `/maps/{mapId}`             | 地图资料页暂停开放，显示暂停说明 |
 
 平台：`steam` / `kakao` / `xbox` / `psn`。昵称大小写须与游戏内一致。
 
@@ -111,24 +111,24 @@ MCP_TOKEN=换成足够长的随机串
 }
 ```
 
-| Tool                   | 说明                        |
-|------------------------|---------------------------|
-| `search_player`        | 搜索玩家                      |
-| `get_player_dashboard` | 战绩概览                      |
-| `get_player_form`      | 近况 formStatus + anomalies |
-| `get_player_analysis`  | 近 N 场报告聚合                 |
-| `get_match`            | 对局详情（含 mapLabel 中文）       |
+| Tool                   | 说明                         |
+|------------------------|----------------------------|
+| `search_player`        | 搜索玩家                       |
+| `get_player_dashboard` | 战绩概览                       |
+| `get_player_form`      | 近况 formStatus + anomalies  |
+| `get_player_analysis`  | 近 N 场报告聚合                  |
+| `get_match`            | 对局详情（含 mapLabel 中文）        |
 | `get_match_report`     | 复盘报告（附 mapName / mapLabel） |
-| `compare_players`      | 两人赛季 KPI 对比               |
-| `get_squad_stats`      | 车队同场统计                    |
-| `suggest_squad_mates`  | 常一起 Top3 队友               |
-| `get_player_weapons`   | 武器 / 战斗聚合                 |
-| `get_player_maps`      | 地图聚合（含 mapLabel）          |
-| `list_seasons`         | 赛季列表                      |
-| `list_player_history`  | 本地历史库列表                   |
-| `parse_telemetry`      | 幂等解析对局遥测                  |
+| `compare_players`      | 两人赛季 KPI 对比                |
+| `get_squad_stats`      | 车队同场统计                     |
+| `suggest_squad_mates`  | 常一起 Top3 队友                |
+| `get_player_weapons`   | 武器 / 战斗聚合                  |
+| `get_player_maps`      | 地图聚合（含 mapLabel）           |
+| `list_seasons`         | 赛季列表                       |
+| `list_player_history`  | 本地历史库列表                    |
+| `parse_telemetry`      | 幂等解析对局遥测                   |
 | `get_telemetry_events` | 精简事件流（可 autoParse）         |
-| `sync_player_history`  | 同步近况到本地历史库（有冷却）           |
+| `sync_player_history`  | 同步近况到本地历史库（有冷却）            |
 
 Tools 直接调用服务层，不经 `/api/v1` HTTP 自调用。局域网可直连；公网需隧道或正式部署，并建议防火墙限 IP。
 
@@ -140,6 +140,8 @@ Tools 直接调用服务层，不经 `/api/v1` HTTP 自调用。局域网可直�
 |------|----------------------------------------------|---------------------------------------|
 | GET  | `/api/v1/smoke`                              | 连通性冒烟                                 |
 | GET  | `/api/v1/players/search`                     | 搜索（含 `banType`）                       |
+| GET  | `/api/v1/clans/{clanId}`                     | 官方战队资料（需 `platform`，含缓存） |
+| GET / POST | `/api/v1/players/season-review`          | 可选 AI 赛季评价；GET 读缓存，POST 手动生成 |
 | GET  | `/api/v1/players/dashboard`                  | 玩家页聚合（弱点、趋势、历史落盘）                     |
 | GET  | `/api/v1/players/analysis`                   | 近 N 场报告聚合                             |
 | GET  | `/api/v1/players/form`                       | 近况 form + 异常                          |

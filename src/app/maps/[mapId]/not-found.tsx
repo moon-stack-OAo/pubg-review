@@ -8,8 +8,8 @@ export default function MapNotFound() {
       <PageShell className="items-center justify-center text-center">
         <p className="font-mono text-sm text-muted">404 / MAP NOT FOUND</p>
         <h1 className="text-2xl font-semibold">未找到这张地图</h1>
-        <Link href="/maps" className={buttonClass("primary")}>
-          返回地图中心
+        <Link href="/" className={buttonClass("primary")}>
+          返回查询
         </Link>
       </PageShell>
     </div>

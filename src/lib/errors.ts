@@ -48,6 +48,9 @@ export function friendlyErrorMessage(error: unknown): string {
       if (error.message.includes("对局")) {
         return "对局不存在或已过期（官方约保留 14 天）";
       }
+      if (error.message.includes("战队")) {
+        return "战队不存在或已解散";
+      }
       return "未找到玩家，请检查平台与昵称大小写是否与游戏内完全一致";
     }
     if (error.status === 429) {

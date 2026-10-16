@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import {buildMatchHref} from "@/lib/navigation";
 import {Card, GameModeChips, Kpi} from "@/components/ui";
 import {
   formatDateTime,
@@ -16,12 +17,14 @@ export function WindowStatsCard({
   platform,
   accountId,
   name,
+  returnTo,
 }: {
   stats: PlayerWindowStats | null;
   error?: string;
   platform: string;
   accountId: string;
   name: string;
+  returnTo?: string;
 }) {
   if (error) {
     return (
@@ -104,7 +107,7 @@ export function WindowStatsCard({
                     >
                       <td className="px-2 py-2">
                         <Link
-                          href={`/match/${m.matchId}?platform=${platform}&accountId=${encodeURIComponent(accountId)}&name=${encodeURIComponent(name)}`}
+                          href={buildMatchHref(m.matchId, {platform, accountId, name, returnTo})}
                           className="text-accent hover:underline"
                         >
                           {formatDateTime(m.playedAt)}

@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import {buildMatchHref} from "@/lib/navigation";
 import {Card} from "@/components/ui";
 import {aggregateWeaponsFromTelemetry} from "@/lib/history/aggregate";
 import {readParsedEvents} from "@/lib/telemetry/storage";
@@ -8,18 +9,17 @@ export async function MatchWeaponsPanel({
   platform,
   accountId,
   playerName,
+  returnTo,
   telemetryStatus,
 }: {
   matchId: string;
   platform: string;
   accountId?: string;
   playerName?: string;
+  returnTo?: string;
   telemetryStatus: string;
 }) {
-  const timelineQs = new URLSearchParams({ platform, tab: "timeline" });
-  if (accountId) timelineQs.set("accountId", accountId);
-  if (playerName) timelineQs.set("name", playerName);
-  const timelineHref = `/match/${matchId}?${timelineQs.toString()}`;
+  const timelineHref = buildMatchHref(matchId, {platform, accountId, name: playerName, returnTo, tab: "timeline"});
 
   if (telemetryStatus !== "ready") {
     return (

@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import {buildMatchHref, firstQueryValues, validatePlayerReturnHref, type PageQuery} from "@/lib/navigation";
 import {CopyShareLink} from "@/components/copy-share-link";
 import {ExportScoreboardCsv} from "@/components/export-scoreboard-csv";
 import {MatchReplay} from "@/components/match/match-replay";
@@ -20,13 +21,7 @@ import {getTelemetryMeta, getTelemetryStatus} from "@/lib/telemetry/service";
 
 type PageProps = {
   params: Promise<{ matchId: string }>;
-  searchParams: Promise<{
-    platform?: string;
-    accountId?: string;
-    name?: string;
-    tab?: string;
-    t?: string;
-  }>;
+  searchParams: Promise<PageQuery>;
 };
 
 function parseInitialT(raw: string | undefined): number | undefined {
@@ -44,7 +39,9 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
     name: playerName = "",
     tab: tabRaw = "",
     t: tRaw,
-  } = await searchParams;
+    returnTo: returnToRaw,
+  } = firstQueryValues(await searchParams);
+  const returnTo = validatePlayerReturnHref(returnToRaw, platform, playerName);
   const tab = parseMatchTab(tabRaw);
   const initialT = parseInitialT(tRaw);
 
@@ -108,14 +105,11 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
     }
   }
 
-  const backHref = playerName
+  const backHref = returnTo ?? (playerName
     ? `/player/${platform}/${encodeURIComponent(playerName)}`
-    : "/";
+    : "/");
 
-  const refreshQs = new URLSearchParams({ platform });
-  if (accountId) refreshQs.set("accountId", accountId);
-  if (playerName) refreshQs.set("name", playerName);
-  if (tab !== "report") refreshQs.set("tab", tab);
+  const refreshHref = buildMatchHref(matchId, {platform, accountId, name: playerName, returnTo, tab, t: initialT});
 
   return (
     <div className="flex min-h-full flex-col">
@@ -134,7 +128,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
               />
             ) : null}
             <Link
-              href={`/match/${matchId}?${refreshQs.toString()}`}
+              href={refreshHref}
               className={buttonClass("secondary", "sm")}
             >
               刷新
@@ -177,6 +171,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
             platform={platform}
             accountId={accountId || undefined}
             name={playerName || undefined}
+            returnTo={returnTo}
             active={tab}
             telemetryStatus={telemetryStatus}
           />
@@ -277,6 +272,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
               platform={platform}
               accountId={accountId || undefined}
               playerName={playerName || undefined}
+              returnTo={returnTo}
             />
           )}
 
@@ -295,6 +291,7 @@ export default async function MatchPage({ params, searchParams }: PageProps) {
               platform={platform}
               accountId={accountId || undefined}
               playerName={playerName || undefined}
+              returnTo={returnTo}
               telemetryStatus={telemetryStatus}
             />
           )}
