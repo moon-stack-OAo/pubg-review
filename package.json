@@ -14,6 +14,7 @@
     "check:map-coords": "node scripts/check-map-coords.mjs",
     "check:friendly-fire": "node scripts/check-friendly-fire.mjs",
     "check:cache-memory": "node scripts/check-cache-memory.mjs",
+    "check:api-keys": "node scripts/check-api-keys.mjs",
     "check:telemetry-memory": "node scripts/check-telemetry-memory.mjs"
   },
   "dependencies": {

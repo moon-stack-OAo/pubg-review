@@ -17,7 +17,7 @@ cp .env.example .env.local
 | 变量                        | 必填         | 说明                                                                        |
 |---------------------------|------------|---------------------------------------------------------------------------|
 | `PUBG_API_KEY`            | 是*         | [developer.pubg.com](https://developer.pubg.com/) 申请；仅服务端；与下方多 Key 二选一或合并 |
-| `PUBG_API_KEYS`           | 否          | 多个 Key（逗号分隔或 JSON 数组）；轮询，遇 429 换下一个                                       |
+| `PUBG_API_KEYS`           | 否          | 多个 Key（逗号分隔或 JSON 数组）；轮询，遇 401 / 403 / 429 换下一个                        |
 | `RATE_LIMIT_RPM`          | 否          | BFF 每 IP 读限流，默认 `30`                                                      |
 | `RATE_LIMIT_MUTATION_RPM` | 否          | 写/强制刷新更严限流，默认约为读限流的 1/3                                                   |
 | `TRUST_PROXY`             | 否          | 是否信任 `X-Forwarded-For`，默认 `false`                                         |
@@ -30,6 +30,10 @@ cp .env.example .env.local
 | `AI_RATE_LIMIT_RPM`       | 否          | 进程内 AI 外呼 RPM，默认 `6`（与官方 PUBG 限额无关）                                       |
 
 > 真实 Key / Token 不要提交 Git，也不要写进前端代码。
+
+收到 401 的 Key 会在当前进程内停用，后续请求自动跳过；更新 Key 后请重启服务。403 仅在本次请求中换 Key，不全局停用。每个 Key 每次请求最多尝试一次；全部失败时，若有 429 则返回限流错误，否则有 403 则返回拒绝访问错误，仅全部鉴权失效时返回 401。
+
+离线回归检查：`npm run check:api-keys`（模拟上游响应，不调用官方 API）。
 
 ### 2. 安装与启动
 

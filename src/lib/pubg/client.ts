@@ -79,6 +79,7 @@ function parseApiKeys(): string[] {
 }
 
 let apiKeyCursor = 0;
+const unauthorizedApiKeys = new Set<string>();
 
 function getApiKeys(): string[] {
   const keys = parseApiKeys();
@@ -151,6 +152,22 @@ async function pubgFetchOnce<T extends JsonApiResponse>(
     }
 
     const text = await response.text();
+    if (response.status === 401 || response.status === 403) {
+      void appendApiSyncLog({
+        path: logPath,
+        status: response.status,
+        durationMs: Date.now() - started,
+        platform,
+        error: response.status === 401 ? "unauthorized_key_disabled" : "forbidden_key_retry",
+      });
+      throw new PubgApiError(
+        response.status === 401
+          ? "PUBG API Key 鉴权失败（401）"
+          : "PUBG API 拒绝访问（403）",
+        response.status,
+      );
+    }
+
     let body: T | null = null;
     if (text) {
       try {
@@ -224,17 +241,31 @@ async function pubgFetch<T extends JsonApiResponse>(
   const keys = getApiKeys();
   const start = apiKeyCursor % keys.length;
   let lastRateLimit: PubgApiError | null = null;
+  let lastForbidden: PubgApiError | null = null;
 
   for (let i = 0; i < keys.length; i++) {
     const index = (start + i) % keys.length;
     const key = keys[index];
+    if (unauthorizedApiKeys.has(key)) continue;
+
     try {
       const body = await pubgFetchOnce<T>(url, logPath, platform, key, init);
       apiKeyCursor = (index + 1) % keys.length;
       return body;
     } catch (error) {
+      if (error instanceof PubgApiError && error.status === 401) {
+        // 仅在当前进程停用，更新 Key 或重启后可恢复尝试。
+        unauthorizedApiKeys.add(key);
+        apiKeyCursor = (index + 1) % keys.length;
+        continue;
+      }
       if (error instanceof PubgApiError && error.status === 429) {
         lastRateLimit = error;
+        apiKeyCursor = (index + 1) % keys.length;
+        continue;
+      }
+      if (error instanceof PubgApiError && error.status === 403) {
+        lastForbidden = error;
         apiKeyCursor = (index + 1) % keys.length;
         continue;
       }
@@ -244,7 +275,11 @@ async function pubgFetch<T extends JsonApiResponse>(
 
   throw (
     lastRateLimit ??
-    new PubgApiError("PUBG API 限流（429）", 429, 60)
+    lastForbidden ??
+    new PubgApiError(
+      "所有 PUBG API Key 均鉴权失败（401），请更新 Key 并重启服务",
+      401,
+    )
   );
 }
 
